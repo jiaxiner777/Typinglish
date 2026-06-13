@@ -12,15 +12,24 @@ interface ZenViewProps {
   onExit: () => void;
 }
 
-function bookmarkKey(chunkId: string) {
-  return `typinglish:bookmark:${chunkId}`;
-}
-
 function displayMeta(source: Source) {
   const level = typeof source.metadata.level === "string" ? source.metadata.level : "B1";
   const genre = typeof source.metadata.genre === "string" ? source.metadata.genre : "reading";
   const minutes = typeof source.metadata.minutes === "number" ? `${source.metadata.minutes} min` : "short";
   return `${genre} / ${level} / ${minutes}`;
+}
+
+function applyChunkProgress(chunks: MapChunk[], chunkId: string, nextSequence: number) {
+  return chunks.map((chunk) => {
+    if (chunk.id !== chunkId) return chunk;
+    return {
+      ...chunk,
+      progress: {
+        ...chunk.progress,
+        lastNodeSequence: Math.max(chunk.progress.lastNodeSequence, nextSequence)
+      }
+    };
+  });
 }
 
 export function ZenView({ inputMode, onExit }: ZenViewProps) {
@@ -58,8 +67,8 @@ export function ZenView({ inputMode, onExit }: ZenViewProps) {
   }, [selectedSource]);
 
   async function startChunk(chunk: MapChunk, restart = false) {
-    const saved = restart ? 1 : Number(localStorage.getItem(bookmarkKey(chunk.id)) ?? chunk.progress.lastNodeSequence ?? 1);
-    const stream = await fetchChunkStream(chunk.id, Math.max(1, saved), 80);
+    const saved = restart ? 1 : Math.max(1, chunk.progress.lastNodeSequence ?? 1);
+    const stream = await fetchChunkStream(chunk.id, saved, 80);
     setSelectedChunk(chunk);
     setNodes(stream.nodes);
     setActiveLine(0);
@@ -74,19 +83,38 @@ export function ZenView({ inputMode, onExit }: ZenViewProps) {
     if (!completed || !selectedChunk || !activeNode) return;
     const handle = window.setTimeout(() => {
       const nextSeq = activeNode.sequence + 1;
-      localStorage.setItem(bookmarkKey(selectedChunk.id), String(nextSeq));
       const finalMetrics = metrics();
       void reportProgress({
         chunk_id: selectedChunk.id,
         wpm: finalMetrics.wpm,
         accuracy: finalMetrics.accuracy,
         current_seq: nextSeq
-      });
+      })
+        .then((result) => {
+          setChunks((current) =>
+            current.map((chunk) => {
+              if (chunk.id !== selectedChunk.id) return chunk;
+              return {
+                ...chunk,
+                progress: {
+                  ...chunk.progress,
+                  highestWpm: Math.max(chunk.progress.highestWpm, result.progress.highestWpm),
+                  highestAccuracy: Math.max(chunk.progress.highestAccuracy, result.progress.highestAccuracy),
+                  starsEarned: Math.max(chunk.progress.starsEarned, result.progress.starsEarned),
+                  lastNodeSequence: result.progress.lastNodeSequence,
+                  isCompleted: result.progress.isCompleted
+                }
+              };
+            })
+          );
+        })
+        .catch(console.error);
 
       if (activeLine + 1 >= nodes.length) {
         setFinished(true);
       } else {
         setActiveLine((line) => line + 1);
+        setChunks((current) => applyChunkProgress(current, selectedChunk.id, nextSeq));
       }
     }, 260);
     return () => window.clearTimeout(handle);
@@ -157,7 +185,7 @@ export function ZenView({ inputMode, onExit }: ZenViewProps) {
                 </div>
                 <div className="grid gap-3 md:grid-cols-2">
                   {chunks.map((chunk) => {
-                    const saved = Number(localStorage.getItem(bookmarkKey(chunk.id)) ?? chunk.progress.lastNodeSequence ?? 1);
+                    const saved = Math.max(1, chunk.progress.lastNodeSequence ?? 1);
                     const hasProgress = saved > 1;
                     return (
                       <button

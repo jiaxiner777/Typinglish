@@ -1,14 +1,20 @@
 export type SourceType = "SERIES" | "BOOK" | "VOCAB";
+export type SourceStatus = "draft" | "published" | "archived";
 export type InputMode = "STRICT" | "TOLERANT";
 
 export interface Source {
   id: string;
+  slug: string | null;
   title: string;
   type: SourceType;
   coverUrl: string | null;
   isActive: boolean;
+  status: SourceStatus;
+  sortOrder: number;
   metadata: Record<string, unknown>;
   createdAt: string;
+  updatedAt: string;
+  publishedAt: string | null;
 }
 
 export interface Chunk {
@@ -17,12 +23,15 @@ export interface Chunk {
   chapterNum: number;
   sectionNum: number;
   title: string;
+  summary: string | null;
   dependencies: string[];
   mapZone: string;
   mapPosX: number;
   mapPosY: number;
   wordCount: number;
+  metadata: Record<string, unknown>;
   createdAt: string;
+  updatedAt: string;
 }
 
 export interface ContentNode {
@@ -33,6 +42,9 @@ export interface ContentNode {
   cleanText: string;
   translation: string | null;
   audioUrl: string | null;
+  notes: string | null;
+  createdAt: string | null;
+  updatedAt: string | null;
 }
 
 export interface UserProgress {

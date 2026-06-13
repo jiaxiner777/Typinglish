@@ -5,11 +5,17 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1",
-    "build": "tsc -b && vite build",
-    "preview": "vite preview --host 127.0.0.1",
-    "api": "tsx server/index.ts",
-    "import:srt": "tsx server/scripts/import-srt.ts",
-    "check": "tsc -b",
+    "dev:client": "vite --host 127.0.0.1",
+    "dev:server": "node --env-file-if-exists=.env --import tsx server/index.ts",
+    "build": "npm run check && npm run build:client && npm run build:server",
+    "build:client": "vite build",
+    "build:server": "tsc -p tsconfig.server.json",
+    "preview": "vite preview --host 0.0.0.0",
+    "start": "node --env-file-if-exists=.env build/server/index.js",
+    "api": "node --env-file-if-exists=.env --import tsx server/index.ts",
+    "import:srt": "node --env-file-if-exists=.env --import tsx server/scripts/import-srt.ts",
+    "seed:demo": "node --env-file-if-exists=.env --import tsx server/scripts/seed-demo.ts",
+    "check": "tsc -b && tsc -p tsconfig.server.json --noEmit",
     "smoke": "node scripts/smoke.mjs"
   },
   "dependencies": {
