@@ -1,13 +1,16 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { ArrowLeft, BookOpen, CheckCircle2, Library, RotateCcw } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { fetchChunkStream, fetchSourceMap, fetchSources, reportProgress } from "../api";
+import { fetchChunkStream, fetchSourceMap, fetchSources } from "../api";
 import { ModeSwitch } from "../components/ModeSwitch";
 import { TypingCanvas } from "../components/TypingCanvas";
+import { applyGuestProgress, useGuestProgress } from "../store/guestProgress";
 import { useTypingCore } from "../store/typingCore";
-import type { ContentNode, InputMode, MapChunk, Source } from "../types";
+import type { AnonymousIdentity, ContentNode, InputMode, MapChunk, Source } from "../types";
+import { calculateStars } from "../utils/stats";
 
 interface ZenViewProps {
+  identity: AnonymousIdentity;
   inputMode: InputMode;
   onExit: () => void;
 }
@@ -19,30 +22,20 @@ function displayMeta(source: Source) {
   return `${genre} / ${level} / ${minutes}`;
 }
 
-function applyChunkProgress(chunks: MapChunk[], chunkId: string, nextSequence: number) {
-  return chunks.map((chunk) => {
-    if (chunk.id !== chunkId) return chunk;
-    return {
-      ...chunk,
-      progress: {
-        ...chunk.progress,
-        lastNodeSequence: Math.max(chunk.progress.lastNodeSequence, nextSequence)
-      }
-    };
-  });
-}
-
-export function ZenView({ inputMode, onExit }: ZenViewProps) {
+export function ZenView({ identity, inputMode, onExit }: ZenViewProps) {
   const [mode, setMode] = useState<InputMode>(inputMode);
   const [sources, setSources] = useState<Source[]>([]);
   const [selectedSource, setSelectedSource] = useState<Source | null>(null);
-  const [chunks, setChunks] = useState<MapChunk[]>([]);
+  const [baseChunks, setBaseChunks] = useState<MapChunk[]>([]);
   const [selectedChunk, setSelectedChunk] = useState<MapChunk | null>(null);
   const [nodes, setNodes] = useState<ContentNode[]>([]);
   const [activeLine, setActiveLine] = useState(0);
   const [finished, setFinished] = useState(false);
   const completed = useTypingCore((state) => state.completed);
   const metrics = useTypingCore((state) => state.metrics);
+  const progressByChunk = useGuestProgress((state) => state.progressByChunk);
+  const reportGuestProgress = useGuestProgress((state) => state.reportProgress);
+  const chunks = useMemo(() => applyGuestProgress(baseChunks, progressByChunk), [baseChunks, progressByChunk]);
 
   useEffect(() => {
     fetchSources("BOOK")
@@ -56,15 +49,16 @@ export function ZenView({ inputMode, onExit }: ZenViewProps) {
   useEffect(() => {
     if (!selectedSource) return;
     fetchSourceMap(selectedSource.id)
-      .then((items) => {
-        setChunks(items);
+      .then((response) => {
+        if (response.identity.kind !== identity.kind) throw new Error("Unexpected public identity");
+        setBaseChunks(response.chunks);
         setSelectedChunk(null);
         setNodes([]);
         setActiveLine(0);
         setFinished(false);
       })
       .catch(console.error);
-  }, [selectedSource]);
+  }, [identity.kind, selectedSource]);
 
   async function startChunk(chunk: MapChunk, restart = false) {
     const saved = restart ? 1 : Math.max(1, chunk.progress.lastNodeSequence ?? 1);
@@ -84,41 +78,23 @@ export function ZenView({ inputMode, onExit }: ZenViewProps) {
     const handle = window.setTimeout(() => {
       const nextSeq = activeNode.sequence + 1;
       const finalMetrics = metrics();
-      void reportProgress({
-        chunk_id: selectedChunk.id,
+      const starsEarned = calculateStars(finalMetrics.wpm, finalMetrics.accuracy);
+      reportGuestProgress({
+        chunkId: selectedChunk.id,
         wpm: finalMetrics.wpm,
         accuracy: finalMetrics.accuracy,
-        current_seq: nextSeq
-      })
-        .then((result) => {
-          setChunks((current) =>
-            current.map((chunk) => {
-              if (chunk.id !== selectedChunk.id) return chunk;
-              return {
-                ...chunk,
-                progress: {
-                  ...chunk.progress,
-                  highestWpm: Math.max(chunk.progress.highestWpm, result.progress.highestWpm),
-                  highestAccuracy: Math.max(chunk.progress.highestAccuracy, result.progress.highestAccuracy),
-                  starsEarned: Math.max(chunk.progress.starsEarned, result.progress.starsEarned),
-                  lastNodeSequence: result.progress.lastNodeSequence,
-                  isCompleted: result.progress.isCompleted
-                }
-              };
-            })
-          );
-        })
-        .catch(console.error);
+        currentSequence: nextSeq,
+        isCompleted: starsEarned > 0
+      });
 
       if (activeLine + 1 >= nodes.length) {
         setFinished(true);
       } else {
         setActiveLine((line) => line + 1);
-        setChunks((current) => applyChunkProgress(current, selectedChunk.id, nextSeq));
       }
     }, 260);
     return () => window.clearTimeout(handle);
-  }, [activeLine, activeNode, completed, metrics, nodes.length, selectedChunk]);
+  }, [activeLine, activeNode, completed, metrics, nodes.length, reportGuestProgress, selectedChunk]);
 
   if (!selectedChunk || !activeNode || finished) {
     return (

@@ -2,7 +2,7 @@ import { Keyboard, Shield } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { fetchSources } from "../../api/public";
 import { ModeSwitch } from "../../components/ModeSwitch";
-import type { InputMode, Source } from "../../types";
+import { ANONYMOUS_IDENTITY, type InputMode, type Source } from "../../types";
 import { AdventureView } from "../../views/AdventureView";
 import { ZenView } from "../../views/ZenView";
 
@@ -25,7 +25,7 @@ export function PublicApp() {
   const selectedSource = useMemo(() => sources.find((source) => source.id === sourceId) ?? null, [sourceId, sources]);
 
   if (view === "zen") {
-    return <ZenView inputMode={inputMode} onExit={() => setView("adventure")} />;
+    return <ZenView identity={ANONYMOUS_IDENTITY} inputMode={inputMode} onExit={() => setView("adventure")} />;
   }
 
   return (
@@ -61,7 +61,7 @@ export function PublicApp() {
         </div>
       </header>
 
-      <AdventureView source={selectedSource} inputMode={inputMode} />
+      <AdventureView identity={ANONYMOUS_IDENTITY} source={selectedSource} inputMode={inputMode} />
     </div>
   );
 }

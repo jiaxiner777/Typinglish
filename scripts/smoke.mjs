@@ -52,6 +52,12 @@ try {
   const sources = await (await get("http://127.0.0.1:4177/api/v1/sources")).json();
   const map = await (await get(`http://127.0.0.1:4177/api/v1/sources/${sources[0].id}/map`)).json();
   const stream = await (await get(`http://127.0.0.1:4177/api/v1/chunks/${map.chunks[0].id}/stream`)).json();
+  const anonymousReport = await fetch("http://127.0.0.1:4177/api/v1/progress/report", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "x-typinglish-user-id": "forged-user" },
+    body: JSON.stringify({ chunk_id: map.chunks[0].id, wpm: 75, accuracy: 99, current_seq: 2, userId: "forged-user" })
+  }).then((response) => response.json());
+  const mapAfterReport = await (await get(`http://127.0.0.1:4177/api/v1/sources/${sources[0].id}/map`)).json();
 
   console.log(
     JSON.stringify(
@@ -60,7 +66,10 @@ try {
         frontendHtml: html.includes('id="root"'),
         sources: sources.length,
         mapChunks: map.chunks.length,
-        streamNodes: stream.nodes.length
+        streamNodes: stream.nodes.length,
+        anonymousIdentity: map.identity?.kind,
+        anonymousReportPersisted: anonymousReport.persisted,
+        anonymousMapUnchanged: mapAfterReport.chunks[0].progress.isCompleted === false
       },
       null,
       2

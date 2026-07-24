@@ -1,8 +1,8 @@
 import { createApp } from "./app/createApp.js";
 import { readEnv } from "./config/env.js";
-import { createRepository, demoUserId } from "./repository.js";
+import { createRepository } from "./repository.js";
 
-const env = readEnv(demoUserId);
+const env = readEnv();
 const repo = createRepository();
 const app = createApp(env, repo);
 

@@ -1,4 +1,4 @@
-import type { ContentNode, MapChunk, ProgressReportResponse, Source, SourceType } from "../types";
+import type { ContentNode, ProgressReportResponse, Source, SourceMapResponse, SourceType } from "../types";
 import { request } from "./client";
 
 export function fetchSources(type?: SourceType) {
@@ -6,9 +6,8 @@ export function fetchSources(type?: SourceType) {
   return request<Source[]>(`/api/v1/sources${params}`);
 }
 
-export async function fetchSourceMap(sourceId: string) {
-  const data = await request<{ sourceId: string; userId: string; chunks: MapChunk[] }>(`/api/v1/sources/${sourceId}/map`);
-  return data.chunks;
+export function fetchSourceMap(sourceId: string) {
+  return request<SourceMapResponse>(`/api/v1/sources/${sourceId}/map`);
 }
 
 export function fetchSource(sourceId: string) {
