@@ -1,13 +1,15 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { Check, Flag, Lock, MapPin, Play, Sparkles, Star } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { fetchChunkStream, fetchSourceMap, reportProgress } from "../api";
+import { fetchChunkStream, fetchSourceMap } from "../api";
 import { TypingCanvas } from "../components/TypingCanvas";
+import { applyGuestProgress, useGuestProgress } from "../store/guestProgress";
 import { useTypingCore } from "../store/typingCore";
-import type { ContentNode, InputMode, MapChunk, Source } from "../types";
+import type { AnonymousIdentity, ContentNode, InputMode, MapChunk, Source } from "../types";
 import { calculateStars, joinNodeText } from "../utils/stats";
 
 interface AdventureViewProps {
+  identity: AnonymousIdentity;
   source: Source | null;
   inputMode: InputMode;
 }
@@ -70,8 +72,8 @@ function TypewriterAirship() {
   );
 }
 
-export function AdventureView({ source, inputMode }: AdventureViewProps) {
-  const [chunks, setChunks] = useState<MapChunk[]>([]);
+export function AdventureView({ identity, source, inputMode }: AdventureViewProps) {
+  const [baseChunks, setBaseChunks] = useState<MapChunk[]>([]);
   const [selectedChunk, setSelectedChunk] = useState<MapChunk | null>(null);
   const [nodes, setNodes] = useState<ContentNode[]>([]);
   const [result, setResult] = useState<ResultState | null>(null);
@@ -80,11 +82,22 @@ export function AdventureView({ source, inputMode }: AdventureViewProps) {
   const [settling, setSettling] = useState(false);
   const settledAttemptRef = useRef<number | null>(null);
   const metrics = useTypingCore((state) => state.metrics);
+  const progressByChunk = useGuestProgress((state) => state.progressByChunk);
+  const reportGuestProgress = useGuestProgress((state) => state.reportProgress);
+  const chunks = useMemo(() => applyGuestProgress(baseChunks, progressByChunk), [baseChunks, progressByChunk]);
 
   useEffect(() => {
-    if (!source) return;
-    fetchSourceMap(source.id).then(setChunks).catch(console.error);
-  }, [source]);
+    if (!source) {
+      setBaseChunks([]);
+      return;
+    }
+    fetchSourceMap(source.id)
+      .then((response) => {
+        if (response.identity.kind !== identity.kind) throw new Error("Unexpected public identity");
+        setBaseChunks(response.chunks);
+      })
+      .catch(console.error);
+  }, [identity.kind, source]);
 
   const lessonText = useMemo(() => joinNodeText(nodes.map((node) => node.rawText)), [nodes]);
   const completedCount = chunks.filter((chunk) => chunk.progress.isCompleted).length;
@@ -123,21 +136,18 @@ export function AdventureView({ source, inputMode }: AdventureViewProps) {
     const finalMetrics = metrics();
     const stars = calculateStars(finalMetrics.wpm, finalMetrics.accuracy);
     setResult({ ...finalMetrics, stars });
-    await reportProgress({
-      chunk_id: selectedChunk.id,
+    reportGuestProgress({
+      chunkId: selectedChunk.id,
       wpm: finalMetrics.wpm,
       accuracy: finalMetrics.accuracy,
-      current_seq: nodes[nodes.length - 1]?.sequence ?? 1
+      currentSequence: nodes[nodes.length - 1]?.sequence ?? 1,
+      isCompleted: stars > 0
     });
   }
 
-  async function handleResultAction() {
+  function handleResultAction() {
     if (!result) return;
     if (result.stars > 0) {
-      if (source) {
-        const nextMap = await fetchSourceMap(source.id);
-        setChunks(nextMap);
-      }
       setResult(null);
       setSettling(false);
       setSelectedChunk(null);
@@ -374,7 +384,7 @@ export function AdventureView({ source, inputMode }: AdventureViewProps) {
                 )}
                 <button
                   className="mt-6 h-10 rounded-md bg-emerald-300 px-5 font-semibold text-stone-950"
-                  onClick={() => void handleResultAction()}
+                  onClick={handleResultAction}
                   type="button"
                 >
                   {result.stars > 0 ? "继续" : "再试一次"}

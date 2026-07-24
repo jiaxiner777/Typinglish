@@ -2,6 +2,12 @@ export type SourceType = "SERIES" | "BOOK" | "VOCAB";
 export type SourceStatus = "draft" | "published" | "archived";
 export type InputMode = "STRICT" | "TOLERANT";
 
+export interface AnonymousIdentity {
+  kind: "anonymous";
+}
+
+export const ANONYMOUS_IDENTITY: AnonymousIdentity = Object.freeze({ kind: "anonymous" });
+
 export interface Source {
   id: string;
   slug: string | null;
@@ -47,10 +53,7 @@ export interface ContentNode {
   updatedAt: string | null;
 }
 
-export interface UserProgress {
-  id: string;
-  userId: string;
-  chunkId: string;
+export interface ChunkProgress {
   highestWpm: number;
   highestAccuracy: number;
   starsEarned: number;
@@ -59,9 +62,21 @@ export interface UserProgress {
   updatedAt: string;
 }
 
+export interface UserProgress extends ChunkProgress {
+  id: string;
+  userId: string;
+  chunkId: string;
+}
+
 export interface MapChunk extends Chunk {
-  progress: Pick<UserProgress, "starsEarned" | "isCompleted" | "highestWpm" | "highestAccuracy" | "lastNodeSequence">;
+  progress: Omit<ChunkProgress, "updatedAt">;
   locked: boolean;
+}
+
+export interface SourceMapResponse {
+  sourceId: string;
+  identity: AnonymousIdentity;
+  chunks: MapChunk[];
 }
 
 export interface ProgressReportPayload {
@@ -71,7 +86,17 @@ export interface ProgressReportPayload {
   current_seq: number;
 }
 
+export interface AnonymousProgressResult {
+  chunkId: string;
+  wpm: number;
+  accuracy: number;
+  currentSequence: number;
+  starsEarned: number;
+  isCompleted: boolean;
+}
+
 export interface ProgressReportResponse {
-  progress: UserProgress;
-  unlockedChunkIds: string[];
+  identity: AnonymousIdentity;
+  persisted: false;
+  result: AnonymousProgressResult;
 }

@@ -16,6 +16,7 @@
     "import:srt": "node --env-file-if-exists=.env --import tsx server/scripts/import-srt.ts",
     "seed:demo": "node --env-file-if-exists=.env --import tsx server/scripts/seed-demo.ts",
     "check": "tsc -b && tsc -p tsconfig.server.json --noEmit",
+    "test": "node --import tsx --test tests/guest-boundary.test.ts",
     "smoke": "node scripts/smoke.mjs"
   },
   "dependencies": {

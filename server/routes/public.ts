@@ -1,10 +1,10 @@
 import { Router } from "express";
-import { ensureRequestUser } from "../auth.js";
-import { chunkDto, nodeDto, progressDto, sourceDto } from "../mappers.js";
-import type { Repository } from "../repository.js";
+import { getRequestIdentity } from "../auth.js";
+import { chunkDto, nodeDto, sourceDto } from "../mappers.js";
+import { calculateStars, type Repository } from "../repository.js";
 import type { SourceType } from "../types.js";
 
-export function createPublicRouter(repo: Repository, defaultUserId: string) {
+export function createPublicRouter(repo: Repository) {
   const router = Router();
 
   router.get("/health", async (_req, res) => {
@@ -59,35 +59,24 @@ export function createPublicRouter(repo: Repository, defaultUserId: string) {
 
   router.get("/sources/:id/map", async (req, res, next) => {
     try {
-      const user = await ensureRequestUser(req, repo, defaultUserId);
-      const [chunkRows, progressRows] = await Promise.all([repo.getChunksForSource(req.params.id), repo.getProgressForUser(user.id)]);
-      const progressByChunk = new Map(progressRows.map((row) => [row.chunk_id, row]));
-      const completed = new Set(progressRows.filter((row) => row.is_completed).map((row) => row.chunk_id));
+      const identity = getRequestIdentity(req);
+      const chunkRows = await repo.getChunksForSource(req.params.id);
 
       const chunks = chunkRows.map((chunk) => {
-        const progress = progressByChunk.get(chunk.id);
         return {
           ...chunkDto(chunk),
-          progress: progress
-            ? {
-                starsEarned: progress.stars_earned,
-                isCompleted: progress.is_completed,
-                highestWpm: progress.highest_wpm,
-                highestAccuracy: progress.highest_accuracy,
-                lastNodeSequence: progress.last_node_sequence
-              }
-            : {
-                starsEarned: 0,
-                isCompleted: false,
-                highestWpm: 0,
-                highestAccuracy: 0,
-                lastNodeSequence: 1
-              },
-          locked: chunk.dependencies.some((id) => !completed.has(id))
+          progress: {
+            starsEarned: 0,
+            isCompleted: false,
+            highestWpm: 0,
+            highestAccuracy: 0,
+            lastNodeSequence: 1
+          },
+          locked: chunk.dependencies.length > 0
         };
       });
 
-      res.json({ sourceId: req.params.id, userId: user.id, chunks });
+      res.json({ sourceId: req.params.id, identity, chunks });
     } catch (error) {
       next(error);
     }
@@ -120,26 +109,36 @@ export function createPublicRouter(repo: Repository, defaultUserId: string) {
 
   router.post("/progress/report", async (req, res, next) => {
     try {
-      const user = await ensureRequestUser(req, repo, defaultUserId);
       const payload = req.body as { chunk_id?: string; wpm?: number; accuracy?: number; current_seq?: number };
       if (!payload.chunk_id || typeof payload.wpm !== "number" || typeof payload.accuracy !== "number") {
         res.status(400).json({ error: "chunk_id, wpm and accuracy are required" });
         return;
       }
+      if (!Number.isFinite(payload.wpm) || payload.wpm < 0 || !Number.isFinite(payload.accuracy) || payload.accuracy < 0 || payload.accuracy > 100) {
+        res.status(400).json({ error: "wpm and accuracy must be valid non-negative metrics" });
+        return;
+      }
+      if (payload.current_seq !== undefined && (!Number.isFinite(payload.current_seq) || payload.current_seq < 1)) {
+        res.status(400).json({ error: "current_seq must be a positive number" });
+        return;
+      }
 
-      const before = await repo.getProgressForUser(user.id);
-      const beforeCompleted = new Set(before.filter((row) => row.is_completed).map((row) => row.chunk_id));
-      const progress = await repo.reportProgress({
-        userId: user.id,
-        chunkId: payload.chunk_id,
-        wpm: payload.wpm,
-        accuracy: payload.accuracy,
-        currentSeq: payload.current_seq ?? 1
+      const identity = getRequestIdentity(req);
+      const currentSequence = Math.max(1, Math.floor(payload.current_seq ?? 1));
+      const starsEarned = calculateStars(payload.wpm, payload.accuracy);
+
+      res.json({
+        identity,
+        persisted: false,
+        result: {
+          chunkId: payload.chunk_id,
+          wpm: payload.wpm,
+          accuracy: payload.accuracy,
+          currentSequence,
+          starsEarned,
+          isCompleted: starsEarned > 0
+        }
       });
-      const after = await repo.getProgressForUser(user.id);
-      const unlockedChunkIds = after.filter((row) => row.is_completed && !beforeCompleted.has(row.chunk_id)).map((row) => row.chunk_id);
-
-      res.json({ progress: progressDto(progress), unlockedChunkIds });
     } catch (error) {
       next(error);
     }

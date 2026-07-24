@@ -10,7 +10,7 @@ Instead of isolated word drills, Typinglish is built around **playable levels**,
 - **Adventure mode** — progress through level-based typing challenges
 - **Zen mode** — practice with longer reading-style content
 - **Strict / tolerant input modes** — switch between different typing feedback styles
-- **PostgreSQL-backed progress** — content and user progress come from the database, not hardcoded frontend data
+- **Isolated guest progress** — anonymous progress stays in the current page runtime and resets on refresh
 
 ### Built-in content management
 - Manage **sources** (books / series / vocab packs)
@@ -53,7 +53,6 @@ CORS_ORIGIN=http://127.0.0.1:5173
 VITE_API_BASE_URL=http://127.0.0.1:4177
 ADMIN_TOKEN=
 VITE_ADMIN_TOKEN=
-DEMO_USER_ID=00000000-0000-4000-8000-000000000001
 ```
 
 If you enable `ADMIN_TOKEN`, the admin frontend must send the same value through `VITE_ADMIN_TOKEN`.
@@ -93,7 +92,8 @@ Typinglish uses PostgreSQL as the main content source.
 That means:
 - public levels are read from the database
 - Zen reading content is read from the database
-- user progress is written back to the database
+- guest progress stays in browser memory and resets on refresh
+- no user progress is written until authenticated sessions are implemented
 - new content should be added through:
   - `npm run seed:demo`
   - `npm run import:srt`
@@ -170,6 +170,12 @@ Typecheck:
 npm run check
 ```
 
+Guest boundary tests:
+
+```bash
+npm test
+```
+
 Build:
 
 ```bash
@@ -185,7 +191,8 @@ npm run start
 ## Current status
 
 Typinglish already supports:
-- PostgreSQL-backed content and progress
+- PostgreSQL-backed content
+- isolated in-memory guest progress
 - public gameplay flows
 - built-in admin content management
 - demo seeding and SRT import

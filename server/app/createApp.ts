@@ -26,7 +26,7 @@ export function createApp(env: AppEnv, repo: Repository) {
   );
   app.use(express.json({ limit: "2mb" }));
 
-  app.use("/api/v1", createPublicRouter(repo, env.defaultUserId));
+  app.use("/api/v1", createPublicRouter(repo));
   app.use("/api/admin/v1", requireAdminToken(env.adminToken), createAdminRouter(repo));
 
   app.use((error: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {

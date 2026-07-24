@@ -1,19 +1,15 @@
 import type express from "express";
-import type { Repository } from "./repository.js";
 
-export function getRequestUserId(req: express.Request, defaultUserId: string) {
-  const headerUserId = req.header("x-typinglish-user-id")?.trim();
-  return headerUserId || defaultUserId;
+export interface AnonymousIdentity {
+  kind: "anonymous";
 }
 
-export async function ensureRequestUser(req: express.Request, repo: Repository, defaultUserId: string) {
-  const userId = getRequestUserId(req, defaultUserId);
-  return repo.ensureUser({
-    id: userId,
-    displayName: userId === defaultUserId ? "Demo User" : "Developer User",
-    provider: userId === defaultUserId ? "demo" : "header",
-    providerUserId: userId
-  });
+const anonymousIdentity: AnonymousIdentity = Object.freeze({ kind: "anonymous" });
+
+export function getRequestIdentity(_req: express.Request): AnonymousIdentity {
+  // Authentication will be added through a trusted server-side session. Client
+  // headers and request parameters are intentionally not identity sources.
+  return anonymousIdentity;
 }
 
 export function requireAdminToken(adminToken: string | null): express.RequestHandler {
