@@ -3,7 +3,6 @@ export interface AppEnv {
   databaseUrl: string | null;
   nodeEnv: "development" | "test" | "production";
   corsOrigins: string[];
-  defaultUserId: string;
   adminToken: string | null;
 }
 
@@ -40,7 +39,7 @@ function readCorsOrigins() {
   return rawOrigins.split(",").map((item) => item.trim()).filter(Boolean);
 }
 
-export function readEnv(defaultUserId: string): AppEnv {
+export function readEnv(): AppEnv {
   const databaseUrl = readDatabaseUrl();
   const nodeEnv = readNodeEnv();
   if (databaseUrl) {
@@ -53,7 +52,6 @@ export function readEnv(defaultUserId: string): AppEnv {
     databaseUrl,
     nodeEnv,
     corsOrigins: readCorsOrigins(),
-    defaultUserId: process.env.DEMO_USER_ID?.trim() || defaultUserId,
     adminToken: process.env.ADMIN_TOKEN?.trim() || null
   };
 }
