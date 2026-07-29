@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { getRequestIdentity } from "../auth.js";
-import { chunkDto, nodeDto, sourceDto } from "../mappers.js";
+import { chunkDto, nodeDto, progressDto, sourceDto } from "../mappers.js";
 import { calculateStars, type Repository } from "../repository.js";
 import type { SourceType } from "../types.js";
 
@@ -62,16 +62,32 @@ export function createPublicRouter(repo: Repository) {
       const identity = getRequestIdentity(req);
       const chunkRows = await repo.getChunksForSource(req.params.id);
 
+      // Load progress for authenticated users; anonymous gets zero progress
+      let progressMap: Map<string, ReturnType<typeof progressDto>> = new Map();
+      if (identity.kind === "authenticated") {
+        const progressRows = await repo.getProgressForUser(identity.userId);
+        progressMap = new Map(progressRows.map((row) => [row.chunk_id, progressDto(row)]));
+      }
+
       const chunks = chunkRows.map((chunk) => {
+        const progress = progressMap.get(chunk.id);
         return {
           ...chunkDto(chunk),
-          progress: {
-            starsEarned: 0,
-            isCompleted: false,
-            highestWpm: 0,
-            highestAccuracy: 0,
-            lastNodeSequence: 1
-          },
+          progress: progress
+            ? {
+                starsEarned: progress.starsEarned,
+                isCompleted: progress.isCompleted,
+                highestWpm: progress.highestWpm,
+                highestAccuracy: progress.highestAccuracy,
+                lastNodeSequence: progress.lastNodeSequence
+              }
+            : {
+                starsEarned: 0,
+                isCompleted: false,
+                highestWpm: 0,
+                highestAccuracy: 0,
+                lastNodeSequence: 1
+              },
           locked: chunk.dependencies.length > 0
         };
       });
@@ -127,16 +143,42 @@ export function createPublicRouter(repo: Repository) {
       const currentSequence = Math.max(1, Math.floor(payload.current_seq ?? 1));
       const starsEarned = calculateStars(payload.wpm, payload.accuracy);
 
+      // Anonymous: do not write to repository
+      if (identity.kind === "anonymous") {
+        res.json({
+          identity,
+          persisted: false,
+          result: {
+            chunkId: payload.chunk_id,
+            wpm: payload.wpm,
+            accuracy: payload.accuracy,
+            currentSequence,
+            starsEarned,
+            isCompleted: starsEarned > 0
+          }
+        });
+        return;
+      }
+
+      // Authenticated: persist to user's progress
+      const persisted = await repo.reportProgress({
+        userId: identity.userId,
+        chunkId: payload.chunk_id,
+        wpm: payload.wpm,
+        accuracy: payload.accuracy,
+        currentSeq: currentSequence
+      });
+
       res.json({
         identity,
-        persisted: false,
+        persisted: true,
         result: {
           chunkId: payload.chunk_id,
           wpm: payload.wpm,
           accuracy: payload.accuracy,
           currentSequence,
-          starsEarned,
-          isCompleted: starsEarned > 0
+          starsEarned: persisted.stars_earned,
+          isCompleted: persisted.is_completed
         }
       });
     } catch (error) {

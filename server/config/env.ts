@@ -4,6 +4,7 @@ export interface AppEnv {
   nodeEnv: "development" | "test" | "production";
   corsOrigins: string[];
   adminToken: string | null;
+  cookieSecure: boolean;
 }
 
 function readPort() {
@@ -52,6 +53,7 @@ export function readEnv(): AppEnv {
     databaseUrl,
     nodeEnv,
     corsOrigins: readCorsOrigins(),
-    adminToken: process.env.ADMIN_TOKEN?.trim() || null
+    adminToken: process.env.ADMIN_TOKEN?.trim() || null,
+    cookieSecure: nodeEnv === "production"
   };
 }

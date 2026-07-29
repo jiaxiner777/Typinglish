@@ -6,7 +6,22 @@ export interface AnonymousIdentity {
   kind: "anonymous";
 }
 
+export interface AuthenticatedIdentity {
+  kind: "authenticated";
+  userId: string;
+  email: string | null;
+  displayName: string | null;
+}
+
+export type Identity = AnonymousIdentity | AuthenticatedIdentity;
+
 export const ANONYMOUS_IDENTITY: AnonymousIdentity = Object.freeze({ kind: "anonymous" });
+
+export interface AuthUser {
+  id: string;
+  email: string | null;
+  displayName: string | null;
+}
 
 export interface Source {
   id: string;
@@ -75,7 +90,7 @@ export interface MapChunk extends Chunk {
 
 export interface SourceMapResponse {
   sourceId: string;
-  identity: AnonymousIdentity;
+  identity: Identity;
   chunks: MapChunk[];
 }
 
@@ -86,7 +101,7 @@ export interface ProgressReportPayload {
   current_seq: number;
 }
 
-export interface AnonymousProgressResult {
+export interface ProgressResult {
   chunkId: string;
   wpm: number;
   accuracy: number;
@@ -96,7 +111,7 @@ export interface AnonymousProgressResult {
 }
 
 export interface ProgressReportResponse {
-  identity: AnonymousIdentity;
-  persisted: false;
-  result: AnonymousProgressResult;
+  identity: Identity;
+  persisted: boolean;
+  result: ProgressResult;
 }

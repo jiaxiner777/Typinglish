@@ -6,11 +6,11 @@ import { ModeSwitch } from "../components/ModeSwitch";
 import { TypingCanvas } from "../components/TypingCanvas";
 import { applyGuestProgress, useGuestProgress } from "../store/guestProgress";
 import { useTypingCore } from "../store/typingCore";
-import type { AnonymousIdentity, ContentNode, InputMode, MapChunk, Source } from "../types";
+import type { ContentNode, Identity, InputMode, MapChunk, Source } from "../types";
 import { calculateStars } from "../utils/stats";
 
 interface ZenViewProps {
-  identity: AnonymousIdentity;
+  identity: Identity;
   inputMode: InputMode;
   onExit: () => void;
 }

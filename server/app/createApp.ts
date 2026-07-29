@@ -1,9 +1,10 @@
 import cors from "cors";
 import express from "express";
-import { requireAdminToken } from "../auth.js";
+import { createSessionMiddleware, requireAdminToken } from "../auth.js";
 import type { AppEnv } from "../config/env.js";
 import type { Repository } from "../repository.js";
 import { createAdminRouter } from "../routes/admin.js";
+import { createAuthRouter } from "../routes/auth.js";
 import { createPublicRouter } from "../routes/public.js";
 
 export function createApp(env: AppEnv, repo: Repository) {
@@ -12,7 +13,7 @@ export function createApp(env: AppEnv, repo: Repository) {
   app.use(
     cors(
       env.corsOrigins.length === 0
-        ? undefined
+        ? { origin: true, credentials: true }
         : {
             origin(origin, callback) {
               if (!origin || env.corsOrigins.includes(origin)) {
@@ -20,12 +21,17 @@ export function createApp(env: AppEnv, repo: Repository) {
                 return;
               }
               callback(new Error(`Origin ${origin} is not allowed by CORS.`));
-            }
+            },
+            credentials: true
           }
     )
   );
   app.use(express.json({ limit: "2mb" }));
 
+  // Session middleware: resolves identity from session cookie before any route
+  app.use(createSessionMiddleware(repo));
+
+  app.use("/api/v1/auth", createAuthRouter(env, repo));
   app.use("/api/v1", createPublicRouter(repo));
   app.use("/api/admin/v1", requireAdminToken(env.adminToken), createAdminRouter(repo));
 

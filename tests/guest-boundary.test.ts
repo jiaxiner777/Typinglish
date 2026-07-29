@@ -123,6 +123,12 @@ function createFakeRepository() {
       calls.reportProgress += 1;
       return unsupported();
     },
+    getUserByEmail: async () => null,
+    getUserById: async () => null,
+    createUser: unsupported,
+    createSession: unsupported,
+    getSessionByTokenHash: async () => null,
+    deleteSession: async () => false,
     createSource: unsupported,
     updateSource: unsupported,
     createChunk: unsupported,
@@ -143,7 +149,8 @@ const env: AppEnv = {
   databaseUrl: null,
   nodeEnv: "test",
   corsOrigins: [],
-  adminToken: null
+  adminToken: null,
+  cookieSecure: false
 };
 
 async function withServer(run: (baseUrl: string) => Promise<void>) {
