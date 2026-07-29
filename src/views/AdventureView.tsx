@@ -1,15 +1,15 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { Check, Flag, Lock, MapPin, Play, Sparkles, Star } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { fetchChunkStream, fetchSourceMap } from "../api";
+import { fetchChunkStream, fetchSourceMap, reportProgress } from "../api";
 import { TypingCanvas } from "../components/TypingCanvas";
 import { applyGuestProgress, useGuestProgress } from "../store/guestProgress";
 import { useTypingCore } from "../store/typingCore";
-import type { AnonymousIdentity, ContentNode, InputMode, MapChunk, Source } from "../types";
+import type { ContentNode, Identity, InputMode, MapChunk, Source } from "../types";
 import { calculateStars, joinNodeText } from "../utils/stats";
 
 interface AdventureViewProps {
-  identity: AnonymousIdentity;
+  identity: Identity;
   source: Source | null;
   inputMode: InputMode;
 }
@@ -136,13 +136,28 @@ export function AdventureView({ identity, source, inputMode }: AdventureViewProp
     const finalMetrics = metrics();
     const stars = calculateStars(finalMetrics.wpm, finalMetrics.accuracy);
     setResult({ ...finalMetrics, stars });
+    const currentSequence = nodes[nodes.length - 1]?.sequence ?? 1;
+
+    // Update guest store for immediate UI feedback
     reportGuestProgress({
       chunkId: selectedChunk.id,
       wpm: finalMetrics.wpm,
       accuracy: finalMetrics.accuracy,
-      currentSequence: nodes[nodes.length - 1]?.sequence ?? 1,
+      currentSequence,
       isCompleted: stars > 0
     });
+
+    // Report to server — anonymous returns persisted:false, authenticated writes to DB
+    try {
+      await reportProgress({
+        chunk_id: selectedChunk.id,
+        wpm: finalMetrics.wpm,
+        accuracy: finalMetrics.accuracy,
+        current_seq: currentSequence
+      });
+    } catch {
+      // Non-critical: guest store already has the immediate result
+    }
   }
 
   function handleResultAction() {

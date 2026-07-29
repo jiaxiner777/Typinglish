@@ -9,6 +9,7 @@ import type {
   ContentNodeRow,
   NodeInput,
   NodePatch,
+  SessionRow,
   SourceInput,
   SourcePatch,
   SourceRow,
@@ -58,6 +59,20 @@ export interface Repository {
     accuracy: number;
     currentSeq: number;
   }): Promise<UserProgressRow>;
+  getUserByEmail(email: string): Promise<UserRow | null>;
+  getUserById(userId: string): Promise<UserRow | null>;
+  createUser(input: {
+    email: string;
+    passwordHash: string;
+    displayName?: string | null;
+  }): Promise<UserRow>;
+  createSession(input: {
+    userId: string;
+    tokenHash: string;
+    expiresAt: string;
+  }): Promise<SessionRow>;
+  getSessionByTokenHash(tokenHash: string): Promise<SessionRow | null>;
+  deleteSession(tokenHash: string): Promise<boolean>;
 }
 
 function nowIso() {
@@ -150,6 +165,7 @@ class MemoryRepository implements Repository {
   private chunkRows = sortChunks(chunks.map(applyChunkDefaults));
   private nodeRows = sortNodes(contentNodes.map(applyNodeDefaults));
   private progress = [...progressRows];
+  private sessions = new Map<string, SessionRow>();
 
   async ping() {}
 
@@ -388,6 +404,54 @@ class MemoryRepository implements Repository {
     existing.is_completed = existing.is_completed || stars > 0;
     existing.updated_at = now;
     return existing;
+  }
+
+  async getUserByEmail(email: string) {
+    const normalized = email.toLowerCase().trim();
+    for (const user of this.users.values()) {
+      if (user.email && user.email.toLowerCase() === normalized) return user;
+    }
+    return null;
+  }
+
+  async getUserById(userId: string) {
+    return this.users.get(userId) ?? null;
+  }
+
+  async createUser(input: { email: string; passwordHash: string; displayName?: string | null }) {
+    const now = nowIso();
+    const user: UserRow = {
+      id: randomUUID(),
+      email: input.email.toLowerCase().trim(),
+      display_name: input.displayName ?? null,
+      password_hash: input.passwordHash,
+      provider: null,
+      provider_user_id: null,
+      created_at: now,
+      updated_at: now
+    };
+    this.users.set(user.id, user);
+    return user;
+  }
+
+  async createSession(input: { userId: string; tokenHash: string; expiresAt: string }) {
+    const session: SessionRow = {
+      id: randomUUID(),
+      user_id: input.userId,
+      token_hash: input.tokenHash,
+      expires_at: input.expiresAt,
+      created_at: nowIso()
+    };
+    this.sessions.set(session.token_hash, session);
+    return session;
+  }
+
+  async getSessionByTokenHash(tokenHash: string) {
+    return this.sessions.get(tokenHash) ?? null;
+  }
+
+  async deleteSession(tokenHash: string) {
+    return this.sessions.delete(tokenHash);
   }
 }
 
@@ -690,6 +754,50 @@ class PostgresRepository implements Repository {
       [input.userId, input.chunkId, input.wpm, input.accuracy, stars, nextSequence, stars > 0]
     );
     return result.rows[0];
+  }
+
+  async getUserByEmail(email: string) {
+    const result = await this.pool.query<UserRow>("SELECT * FROM users WHERE LOWER(email) = LOWER($1)", [email.trim()]);
+    return result.rows[0] ?? null;
+  }
+
+  async getUserById(userId: string) {
+    const result = await this.pool.query<UserRow>("SELECT * FROM users WHERE id = $1", [userId]);
+    return result.rows[0] ?? null;
+  }
+
+  async createUser(input: { email: string; passwordHash: string; displayName?: string | null }) {
+    const result = await this.pool.query<UserRow>(
+      `
+      INSERT INTO users (email, display_name, password_hash, created_at, updated_at)
+      VALUES (LOWER($1), $2, $3, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+      RETURNING *
+      `,
+      [input.email.trim(), input.displayName ?? null, input.passwordHash]
+    );
+    return result.rows[0];
+  }
+
+  async createSession(input: { userId: string; tokenHash: string; expiresAt: string }) {
+    const result = await this.pool.query<SessionRow>(
+      `
+      INSERT INTO sessions (user_id, token_hash, expires_at, created_at)
+      VALUES ($1, $2, $3, CURRENT_TIMESTAMP)
+      RETURNING *
+      `,
+      [input.userId, input.tokenHash, input.expiresAt]
+    );
+    return result.rows[0];
+  }
+
+  async getSessionByTokenHash(tokenHash: string) {
+    const result = await this.pool.query<SessionRow>("SELECT * FROM sessions WHERE token_hash = $1", [tokenHash]);
+    return result.rows[0] ?? null;
+  }
+
+  async deleteSession(tokenHash: string) {
+    const result = await this.pool.query("DELETE FROM sessions WHERE token_hash = $1", [tokenHash]);
+    return (result.rowCount ?? 0) > 0;
   }
 
   private async refreshChunkWordCount(chunkId: string) {

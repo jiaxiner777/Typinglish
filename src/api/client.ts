@@ -20,7 +20,8 @@ export async function request<T>(path: string, options?: RequestInit, extraHeade
 
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...options,
-    headers
+    headers,
+    credentials: "include"
   });
 
   if (!response.ok) {

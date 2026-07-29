@@ -46,6 +46,12 @@ function stopChildren() {
   }
 }
 
+function assert(condition, message) {
+  if (!condition) {
+    throw new Error(`SMOKE ASSERTION FAILED: ${message}`);
+  }
+}
+
 try {
   const health = await (await get("http://127.0.0.1:4177/api/v1/health")).json();
   const html = await (await get("http://127.0.0.1:5173")).text();
@@ -59,24 +65,56 @@ try {
   }).then((response) => response.json());
   const mapAfterReport = await (await get(`http://127.0.0.1:4177/api/v1/sources/${sources[0].id}/map`)).json();
 
-  console.log(
-    JSON.stringify(
-      {
-        health,
-        frontendHtml: html.includes('id="root"'),
-        sources: sources.length,
-        mapChunks: map.chunks.length,
-        streamNodes: stream.nodes.length,
-        anonymousIdentity: map.identity?.kind,
-        anonymousReportPersisted: anonymousReport.persisted,
-        anonymousMapUnchanged: mapAfterReport.chunks[0].progress.isCompleted === false
-      },
-      null,
-      2
-    )
-  );
+  // CORS credentials regression: with Origin header, server must echo the origin
+  // (not "*") and set Access-Control-Allow-Credentials: true.  This guards
+  // against the "Loading / empty map" failure caused by the browser rejecting
+  // credentials-mode requests when ACAO is "*".
+  const corsRes = await fetch("http://127.0.0.1:4177/api/v1/sources", {
+    headers: { Origin: "http://localhost:5173" }
+  });
+  const corsAllowOrigin = corsRes.headers.get("access-control-allow-origin");
+  const corsAllowCredentials = corsRes.headers.get("access-control-allow-credentials");
+
+  // Auth route regression: /api/v1/auth/me must exist and return { user: null }
+  // for anonymous requests.  A 404 here means the server is running stale code.
+  const meRes = await fetch("http://127.0.0.1:4177/api/v1/auth/me");
+  const meBody = await meRes.json();
+
+  const result = {
+    health,
+    frontendHtml: html.includes('id="root"'),
+    sources: sources.length,
+    mapChunks: map.chunks.length,
+    streamNodes: stream.nodes.length,
+    anonymousIdentity: map.identity?.kind,
+    anonymousReportPersisted: anonymousReport.persisted,
+    anonymousMapUnchanged: mapAfterReport.chunks[0].progress.isCompleted === false,
+    corsAllowOrigin,
+    corsAllowCredentials,
+    authMeStatus: meRes.status,
+    authMeUser: meBody.user
+  };
+
+  console.log(JSON.stringify(result, null, 2));
+
+  // --- Assertions ---
+  // Content must be non-empty (guards against "Loading / 0 of 0 cleared" regression)
+  assert(sources.length > 0, "sources array must not be empty (MemoryRepository seed required for local dev)");
+  assert(map.chunks.length > 0, "map chunks must not be empty");
+  assert(stream.nodes.length > 0, "stream nodes must not be empty");
+  // CORS must not return "*" when credentials are enabled
+  assert(corsAllowOrigin !== "*", "CORS Access-Control-Allow-Origin must not be '*' (breaks credentials mode)");
+  assert(corsAllowCredentials === "true", "CORS Access-Control-Allow-Credentials must be 'true'");
+  // Auth route must be mounted (guards against stale-server regression)
+  assert(meRes.status === 200, "GET /api/v1/auth/me must return 200, not 404 (stale server code)");
+  assert(meBody.user === null, "GET /api/v1/auth/me must return { user: null } for anonymous");
+
+  console.log("\n✓ All smoke assertions passed");
+} catch (error) {
+  console.error(`\n✗ ${error.message}`);
+  process.exitCode = 1;
 } finally {
   stopChildren();
 }
 
-setTimeout(() => process.exit(0), 250);
+setTimeout(() => process.exit(process.exitCode || 0), 250);

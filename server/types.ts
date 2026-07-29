@@ -12,6 +12,14 @@ export interface UserRow {
   updated_at: string;
 }
 
+export interface SessionRow {
+  id: string;
+  user_id: string;
+  token_hash: string;
+  expires_at: string;
+  created_at: string;
+}
+
 export interface SourceRow {
   id: string;
   slug: string | null;
