@@ -1,10 +1,13 @@
 import { create } from "zustand";
 import type { InputMode } from "../types";
 
-interface Metrics {
+export interface Metrics {
   wpm: number;
   accuracy: number;
   elapsedSeconds: number;
+  errorCount: number;
+  inputMode: InputMode;
+  completed: boolean;
 }
 
 interface TypingCoreState {
@@ -31,14 +34,16 @@ function isIgnoredKey(key: string) {
   return ["Shift", "Control", "Alt", "Meta", "CapsLock", "Tab", "Escape", "Enter"].includes(key);
 }
 
-function calculateMetrics(state: Pick<TypingCoreState, "charArray" | "startTime" | "endTime" | "errorCount">): Metrics {
+function calculateMetrics(
+  state: Pick<TypingCoreState, "currentIndex" | "startTime" | "endTime" | "errorCount" | "inputMode" | "completed">
+): Metrics {
   const start = state.startTime ?? Date.now();
   const end = state.endTime ?? Date.now();
   const elapsedSeconds = Math.max((end - start) / 1000, 1);
-  const typedChars = state.charArray.length;
+  const typedChars = state.currentIndex;
   const wpm = Math.round((typedChars / 5 / (elapsedSeconds / 60)) * 10) / 10;
   const accuracy = Math.max(0, Math.round(((typedChars - state.errorCount) / Math.max(typedChars, 1)) * 1000) / 10);
-  return { wpm, accuracy, elapsedSeconds };
+  return { wpm, accuracy, elapsedSeconds, errorCount: state.errorCount, inputMode: state.inputMode, completed: state.completed };
 }
 
 export const useTypingCore = create<TypingCoreState>((set, get) => ({
@@ -83,8 +88,7 @@ export const useTypingCore = create<TypingCoreState>((set, get) => ({
       const nextState = {
         ...state,
         userInput: [...state.userInput],
-        wrongIndices: new Set(state.wrongIndices),
-        startTime: state.startTime ?? Date.now()
+        wrongIndices: new Set(state.wrongIndices)
       };
 
       if (key === "Backspace") {
@@ -100,6 +104,7 @@ export const useTypingCore = create<TypingCoreState>((set, get) => ({
 
       if (key.length !== 1) return nextState;
 
+      nextState.startTime = state.startTime ?? Date.now();
       const targetChar = nextState.charArray[nextState.currentIndex];
       nextState.hasStarted = true;
 

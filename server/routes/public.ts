@@ -1,7 +1,8 @@
 import { Router } from "express";
+import { evaluateAdventureAttempt, resolveAdventureConfig, type AdventureInputMode, type AttemptMetrics } from "../../shared/adventure/evaluator.js";
 import { getRequestIdentity } from "../auth.js";
 import { chunkDto, nodeDto, progressDto, sourceDto } from "../mappers.js";
-import { calculateStars, type Repository } from "../repository.js";
+import type { Repository } from "../repository.js";
 import type { SourceType } from "../types.js";
 
 export function createPublicRouter(repo: Repository) {
@@ -69,6 +70,9 @@ export function createPublicRouter(repo: Repository) {
         progressMap = new Map(progressRows.map((row) => [row.chunk_id, progressDto(row)]));
       }
 
+      const completedIds = new Set(
+        [...progressMap.values()].filter((progress) => progress.isCompleted).map((progress) => progress.chunkId)
+      );
       const chunks = chunkRows.map((chunk) => {
         const progress = progressMap.get(chunk.id);
         return {
@@ -88,7 +92,7 @@ export function createPublicRouter(repo: Repository) {
                 highestAccuracy: 0,
                 lastNodeSequence: 1
               },
-          locked: chunk.dependencies.length > 0
+          locked: chunk.dependencies.some((dependencyId) => !completedIds.has(dependencyId))
         };
       });
 
@@ -125,13 +129,42 @@ export function createPublicRouter(repo: Repository) {
 
   router.post("/progress/report", async (req, res, next) => {
     try {
-      const payload = req.body as { chunk_id?: string; wpm?: number; accuracy?: number; current_seq?: number };
-      if (!payload.chunk_id || typeof payload.wpm !== "number" || typeof payload.accuracy !== "number") {
-        res.status(400).json({ error: "chunk_id, wpm and accuracy are required" });
+      const payload = req.body as {
+        chunk_id?: string;
+        wpm?: number;
+        accuracy?: number;
+        error_count?: number;
+        elapsed_seconds?: number;
+        input_mode?: AdventureInputMode;
+        completed?: boolean;
+        timed_out?: boolean;
+        current_seq?: number;
+      };
+      if (
+        !payload.chunk_id ||
+        typeof payload.wpm !== "number" ||
+        typeof payload.accuracy !== "number" ||
+        typeof payload.error_count !== "number" ||
+        typeof payload.elapsed_seconds !== "number" ||
+        (payload.input_mode !== "STRICT" && payload.input_mode !== "TOLERANT") ||
+        typeof payload.completed !== "boolean" ||
+        typeof payload.timed_out !== "boolean"
+      ) {
+        res.status(400).json({ error: "A complete Adventure attempt payload is required" });
         return;
       }
-      if (!Number.isFinite(payload.wpm) || payload.wpm < 0 || !Number.isFinite(payload.accuracy) || payload.accuracy < 0 || payload.accuracy > 100) {
-        res.status(400).json({ error: "wpm and accuracy must be valid non-negative metrics" });
+      if (
+        !Number.isFinite(payload.wpm) ||
+        payload.wpm < 0 ||
+        !Number.isFinite(payload.accuracy) ||
+        payload.accuracy < 0 ||
+        payload.accuracy > 100 ||
+        !Number.isFinite(payload.error_count) ||
+        payload.error_count < 0 ||
+        !Number.isFinite(payload.elapsed_seconds) ||
+        payload.elapsed_seconds < 0
+      ) {
+        res.status(400).json({ error: "Attempt metrics must be finite and within their valid ranges" });
         return;
       }
       if (payload.current_seq !== undefined && (!Number.isFinite(payload.current_seq) || payload.current_seq < 1)) {
@@ -141,7 +174,39 @@ export function createPublicRouter(repo: Repository) {
 
       const identity = getRequestIdentity(req);
       const currentSequence = Math.max(1, Math.floor(payload.current_seq ?? 1));
-      const starsEarned = calculateStars(payload.wpm, payload.accuracy);
+      const chunk = await repo.getChunkById(payload.chunk_id);
+      if (!chunk) {
+        res.status(404).json({ error: "Chunk not found" });
+        return;
+      }
+      const nodes = await repo.listNodesForChunk(chunk.id);
+      const textLength = nodes.map((node) => node.raw_text).join(" ").length;
+      const config = resolveAdventureConfig(chunk.metadata ?? {}, textLength);
+      const metrics: AttemptMetrics = {
+        wpm: payload.wpm,
+        accuracy: payload.accuracy,
+        errorCount: Math.floor(payload.error_count),
+        elapsedSeconds: payload.elapsed_seconds,
+        inputMode: payload.input_mode,
+        completed: payload.completed,
+        timedOut: payload.timed_out
+      };
+      const evaluation = evaluateAdventureAttempt(config, metrics);
+
+      const attemptResult = {
+        chunkId: chunk.id,
+        wpm: metrics.wpm,
+        accuracy: metrics.accuracy,
+        errorCount: metrics.errorCount,
+        elapsedSeconds: metrics.elapsedSeconds,
+        inputMode: metrics.inputMode,
+        completed: metrics.completed,
+        timedOut: metrics.timedOut,
+        currentSequence,
+        passed: evaluation.passed,
+        failureReason: evaluation.failureReason,
+        nextStarHint: evaluation.nextStarHint
+      };
 
       // Anonymous: do not write to repository
       if (identity.kind === "anonymous") {
@@ -149,34 +214,36 @@ export function createPublicRouter(repo: Repository) {
           identity,
           persisted: false,
           result: {
-            chunkId: payload.chunk_id,
-            wpm: payload.wpm,
-            accuracy: payload.accuracy,
-            currentSequence,
-            starsEarned,
-            isCompleted: starsEarned > 0
+            ...attemptResult,
+            starsEarned: evaluation.stars,
+            isCompleted: evaluation.passed
           }
         });
         return;
       }
 
-      // Authenticated: persist to user's progress
+      const userProgress = await repo.getProgressForUser(identity.userId);
+      const completedIds = new Set(userProgress.filter((row) => row.is_completed).map((row) => row.chunk_id));
+      if (chunk.dependencies.some((dependencyId) => !completedIds.has(dependencyId))) {
+        res.status(409).json({ error: "Chunk dependencies are not completed" });
+        return;
+      }
+
       const persisted = await repo.reportProgress({
         userId: identity.userId,
         chunkId: payload.chunk_id,
         wpm: payload.wpm,
         accuracy: payload.accuracy,
-        currentSeq: currentSequence
+        currentSeq: currentSequence,
+        starsEarned: evaluation.stars,
+        passed: evaluation.passed
       });
 
       res.json({
         identity,
         persisted: true,
         result: {
-          chunkId: payload.chunk_id,
-          wpm: payload.wpm,
-          accuracy: payload.accuracy,
-          currentSequence,
+          ...attemptResult,
           starsEarned: persisted.stars_earned,
           isCompleted: persisted.is_completed
         }

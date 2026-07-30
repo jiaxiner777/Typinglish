@@ -7,12 +7,16 @@ interface TypingCanvasProps {
   inputMode: InputMode;
   compact?: boolean;
   resetToken?: number;
+  onStart?: (event: { text: string; resetToken: number; startedAt: number }) => void;
   onComplete?: (event: { text: string; resetToken: number }) => void;
+  onError?: (event: { text: string; resetToken: number; errorCount: number }) => void;
 }
 
-export function TypingCanvas({ text, inputMode, compact = false, resetToken = 0, onComplete }: TypingCanvasProps) {
+export function TypingCanvas({ text, inputMode, compact = false, resetToken = 0, onStart, onComplete, onError }: TypingCanvasProps) {
   const completionNotified = useRef(false);
+  const onStartRef = useRef(onStart);
   const onCompleteRef = useRef(onComplete);
+  const onErrorRef = useRef(onError);
   const handledCompletionId = useRef(useTypingCore.getState().completionId);
   const {
     sourceText,
@@ -30,8 +34,16 @@ export function TypingCanvas({ text, inputMode, compact = false, resetToken = 0,
   } = useTypingCore();
 
   useEffect(() => {
+    onStartRef.current = onStart;
+  }, [onStart]);
+
+  useEffect(() => {
     onCompleteRef.current = onComplete;
   }, [onComplete]);
+
+  useEffect(() => {
+    onErrorRef.current = onError;
+  }, [onError]);
 
   useLayoutEffect(() => {
     completionNotified.current = false;
@@ -46,12 +58,20 @@ export function TypingCanvas({ text, inputMode, compact = false, resetToken = 0,
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
       event.preventDefault();
+      const previousState = useTypingCore.getState();
       commitCharacter(event.key);
+      const nextState = useTypingCore.getState();
+      if (previousState.startTime === null && nextState.startTime !== null) {
+        onStartRef.current?.({ text, resetToken, startedAt: nextState.startTime });
+      }
+      if (nextState.errorCount > previousState.errorCount) {
+        onErrorRef.current?.({ text, resetToken, errorCount: nextState.errorCount });
+      }
     };
 
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [commitCharacter]);
+  }, [commitCharacter, resetToken, text]);
 
   useEffect(() => {
     const reallyFinished =

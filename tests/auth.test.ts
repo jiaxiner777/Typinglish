@@ -30,6 +30,21 @@ function cookieHeader(token: string | null): Record<string, string> {
   return token ? { Cookie: `${SESSION_COOKIE}=${token}` } : {};
 }
 
+function adventureAttempt(patch: Record<string, unknown> = {}) {
+  return {
+    chunk_id: "aaaaaaaa-0001-4000-8000-000000000001",
+    wpm: 65,
+    accuracy: 100,
+    error_count: 0,
+    elapsed_seconds: 20,
+    input_mode: "STRICT",
+    completed: true,
+    timed_out: false,
+    current_seq: 2,
+    ...patch
+  };
+}
+
 interface TestServer {
   baseUrl: string;
   close: () => Promise<void>;
@@ -80,13 +95,7 @@ test("guest progress report does not write to repository", async () => {
         "Content-Type": "application/json",
         "x-typinglish-user-id": "forged-user"
       },
-      body: JSON.stringify({
-        chunk_id: "aaaaaaaa-0001-4000-8000-000000000001",
-        wpm: 70,
-        accuracy: 99,
-        current_seq: 2,
-        userId: "forged-user"
-      })
+      body: JSON.stringify(adventureAttempt({ wpm: 70, userId: "forged-user" }))
     });
 
     assert.equal(res.status, 200);
@@ -130,12 +139,7 @@ test("authenticated user progress persists across map requests", async () => {
     const reportRes = await fetch(`${baseUrl}/api/v1/progress/report`, {
       method: "POST",
       headers,
-      body: JSON.stringify({
-        chunk_id: "aaaaaaaa-0001-4000-8000-000000000001",
-        wpm: 65,
-        accuracy: 99,
-        current_seq: 2
-      })
+      body: JSON.stringify(adventureAttempt())
     });
     assert.equal(reportRes.status, 200);
     const report = await reportRes.json();
@@ -167,7 +171,7 @@ test("authenticated user progress persists across map requests", async () => {
     // Second chunk should be unlocked (its dependency is completed)
     const chunk1 = map.chunks.find((c: { id: string }) => c.id === "aaaaaaaa-0002-4000-8000-000000000002");
     assert.ok(chunk1);
-    assert.equal(chunk1.locked, true); // Server always sets locked based on dependencies, client unlocks
+    assert.equal(chunk1.locked, false);
   });
 });
 
@@ -184,12 +188,7 @@ test("logout clears session and map returns to guest zero progress", async () =>
     await fetch(`${baseUrl}/api/v1/progress/report`, {
       method: "POST",
       headers,
-      body: JSON.stringify({
-        chunk_id: "aaaaaaaa-0001-4000-8000-000000000001",
-        wpm: 65,
-        accuracy: 99,
-        current_seq: 2
-      })
+      body: JSON.stringify(adventureAttempt())
     });
 
     // Verify /me shows authenticated
@@ -234,12 +233,7 @@ test("forged x-typinglish-user-id and body.userId cannot impersonate other users
     await fetch(`${baseUrl}/api/v1/progress/report`, {
       method: "POST",
       headers: victimHeaders,
-      body: JSON.stringify({
-        chunk_id: "aaaaaaaa-0001-4000-8000-000000000001",
-        wpm: 65,
-        accuracy: 99,
-        current_seq: 2
-      })
+      body: JSON.stringify(adventureAttempt())
     });
 
     // Register attacker user
@@ -253,13 +247,7 @@ test("forged x-typinglish-user-id and body.userId cannot impersonate other users
         "x-typinglish-user-id": victimId,
         ...cookieHeader(attackerToken)
       },
-      body: JSON.stringify({
-        chunk_id: "aaaaaaaa-0001-4000-8000-000000000001",
-        wpm: 10,
-        accuracy: 50,
-        current_seq: 1,
-        userId: victimId
-      })
+      body: JSON.stringify(adventureAttempt({ wpm: 10, accuracy: 50, error_count: 10, current_seq: 1, userId: victimId }))
     });
     assert.equal(reportRes.status, 200);
     const report = await reportRes.json();
@@ -348,24 +336,14 @@ test("two users progress is isolated", async () => {
     await fetch(`${baseUrl}/api/v1/progress/report`, {
       method: "POST",
       headers: headersA,
-      body: JSON.stringify({
-        chunk_id: "aaaaaaaa-0001-4000-8000-000000000001",
-        wpm: 65,
-        accuracy: 99,
-        current_seq: 2
-      })
+      body: JSON.stringify(adventureAttempt())
     });
 
     // User B completes chunk 1 with 1 star
     await fetch(`${baseUrl}/api/v1/progress/report`, {
       method: "POST",
       headers: headersB,
-      body: JSON.stringify({
-        chunk_id: "aaaaaaaa-0001-4000-8000-000000000001",
-        wpm: 40,
-        accuracy: 91,
-        current_seq: 1
-      })
+      body: JSON.stringify(adventureAttempt({ wpm: 40, accuracy: 95, current_seq: 1 }))
     });
 
     // User A's map should show 3 stars
@@ -386,6 +364,62 @@ test("two users progress is isolated", async () => {
 
     // User A's identity should not be User B's
     assert.notEqual(mapA.identity.userId, mapB.identity.userId);
+  });
+});
+
+test("Sprint stars are evaluated per attempt instead of combining historical metric highs", async () => {
+  await withServer(async ({ baseUrl }) => {
+    const { token } = await registerAndLogin(baseUrl, "same-attempt@test.com");
+    const headers = { "Content-Type": "application/json", ...cookieHeader(token) };
+
+    await fetch(`${baseUrl}/api/v1/progress/report`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(adventureAttempt())
+    });
+
+    const fastAttempt = await fetch(`${baseUrl}/api/v1/progress/report`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(
+        adventureAttempt({
+          chunk_id: "aaaaaaaa-0002-4000-8000-000000000002",
+          input_mode: "TOLERANT",
+          wpm: 60,
+          accuracy: 90,
+          error_count: 3
+        })
+      )
+    });
+    assert.equal(fastAttempt.status, 200);
+    assert.equal((await fastAttempt.json()).result.starsEarned, 1);
+
+    const accurateAttempt = await fetch(`${baseUrl}/api/v1/progress/report`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(
+        adventureAttempt({
+          chunk_id: "aaaaaaaa-0002-4000-8000-000000000002",
+          input_mode: "TOLERANT",
+          wpm: 40,
+          accuracy: 95,
+          error_count: 1
+        })
+      )
+    });
+    assert.equal(accurateAttempt.status, 200);
+    assert.equal((await accurateAttempt.json()).result.starsEarned, 1);
+
+    const map = await (
+      await fetch(`${baseUrl}/api/v1/sources/11111111-1111-4111-8111-111111111111/map`, {
+        headers: cookieHeader(token)
+      })
+    ).json();
+    const sprintChunk = map.chunks.find((chunk: { id: string }) => chunk.id === "aaaaaaaa-0002-4000-8000-000000000002");
+    const nextChunk = map.chunks.find((chunk: { id: string }) => chunk.id === "aaaaaaaa-0003-4000-8000-000000000003");
+    assert.equal(sprintChunk.progress.starsEarned, 1);
+    assert.equal(sprintChunk.progress.isCompleted, true);
+    assert.equal(nextChunk.locked, false);
   });
 });
 

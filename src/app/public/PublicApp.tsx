@@ -104,7 +104,7 @@ export function PublicApp() {
               </option>
             ))}
           </select>
-          <ModeSwitch view={view} inputMode={inputMode} onViewChange={setView} onInputModeChange={setInputMode} />
+          <ModeSwitch view={view} inputMode={inputMode} onViewChange={setView} onInputModeChange={setInputMode} showInputMode={false} />
 
           {/* Auth area */}
           {authLoading ? null : user ? (
@@ -145,7 +145,7 @@ export function PublicApp() {
         </div>
       </header>
 
-      <AdventureView key={user?.id ?? "guest"} identity={identity} source={selectedSource} inputMode={inputMode} />
+      <AdventureView key={user?.id ?? "guest"} identity={identity} source={selectedSource} />
 
       {/* Auth modal */}
       {authView && (

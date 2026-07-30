@@ -58,6 +58,8 @@ export interface Repository {
     wpm: number;
     accuracy: number;
     currentSeq: number;
+    starsEarned: number;
+    passed: boolean;
   }): Promise<UserProgressRow>;
   getUserByEmail(email: string): Promise<UserRow | null>;
   getUserById(userId: string): Promise<UserRow | null>;
@@ -77,13 +79,6 @@ export interface Repository {
 
 function nowIso() {
   return new Date().toISOString();
-}
-
-function calculateStars(wpm: number, accuracy: number) {
-  if (accuracy >= 98 && wpm >= 60) return 3;
-  if (accuracy >= 95) return 2;
-  if (accuracy >= 90) return 1;
-  return 0;
 }
 
 function uuidFromChunkId(chunkId: string) {
@@ -375,9 +370,16 @@ class MemoryRepository implements Repository {
     return this.progress.filter((row) => row.user_id === userId);
   }
 
-  async reportProgress(input: { userId: string; chunkId: string; wpm: number; accuracy: number; currentSeq: number }) {
+  async reportProgress(input: {
+    userId: string;
+    chunkId: string;
+    wpm: number;
+    accuracy: number;
+    currentSeq: number;
+    starsEarned: number;
+    passed: boolean;
+  }) {
     const existing = this.progress.find((row) => row.user_id === input.userId && row.chunk_id === input.chunkId);
-    const stars = calculateStars(input.wpm, input.accuracy);
     const nextSequence = Math.max(1, input.currentSeq);
     const now = nowIso();
 
@@ -388,9 +390,9 @@ class MemoryRepository implements Repository {
         chunk_id: input.chunkId,
         highest_wpm: input.wpm,
         highest_accuracy: input.accuracy,
-        stars_earned: stars,
+        stars_earned: input.starsEarned,
         last_node_sequence: nextSequence,
-        is_completed: stars > 0,
+        is_completed: input.passed,
         updated_at: now
       };
       this.progress.push(created);
@@ -399,9 +401,9 @@ class MemoryRepository implements Repository {
 
     existing.highest_wpm = Math.max(existing.highest_wpm, input.wpm);
     existing.highest_accuracy = Math.max(existing.highest_accuracy, input.accuracy);
-    existing.stars_earned = Math.max(existing.stars_earned, stars);
+    existing.stars_earned = Math.max(existing.stars_earned, input.starsEarned);
     existing.last_node_sequence = Math.max(existing.last_node_sequence, nextSequence);
-    existing.is_completed = existing.is_completed || stars > 0;
+    existing.is_completed = existing.is_completed || input.passed;
     existing.updated_at = now;
     return existing;
   }
@@ -733,8 +735,15 @@ class PostgresRepository implements Repository {
     return result.rows;
   }
 
-  async reportProgress(input: { userId: string; chunkId: string; wpm: number; accuracy: number; currentSeq: number }) {
-    const stars = calculateStars(input.wpm, input.accuracy);
+  async reportProgress(input: {
+    userId: string;
+    chunkId: string;
+    wpm: number;
+    accuracy: number;
+    currentSeq: number;
+    starsEarned: number;
+    passed: boolean;
+  }) {
     const nextSequence = Math.max(1, input.currentSeq);
     const result = await this.pool.query<UserProgressRow>(
       `
@@ -751,7 +760,7 @@ class PostgresRepository implements Repository {
         updated_at = CURRENT_TIMESTAMP
       RETURNING *
       `,
-      [input.userId, input.chunkId, input.wpm, input.accuracy, stars, nextSequence, stars > 0]
+      [input.userId, input.chunkId, input.wpm, input.accuracy, input.starsEarned, nextSequence, input.passed]
     );
     return result.rows[0];
   }
@@ -824,4 +833,4 @@ export function createRepository(): Repository {
   return new MemoryRepository();
 }
 
-export { calculateStars, demoUserId };
+export { demoUserId };

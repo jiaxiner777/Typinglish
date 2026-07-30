@@ -4,10 +4,9 @@ import { useEffect, useMemo, useState } from "react";
 import { fetchChunkStream, fetchSourceMap, fetchSources } from "../api";
 import { ModeSwitch } from "../components/ModeSwitch";
 import { TypingCanvas } from "../components/TypingCanvas";
-import { applyGuestProgress, useGuestProgress } from "../store/guestProgress";
+import { mapProgressForIdentity, useGuestProgress } from "../store/guestProgress";
 import { useTypingCore } from "../store/typingCore";
 import type { ContentNode, Identity, InputMode, MapChunk, Source } from "../types";
-import { calculateStars } from "../utils/stats";
 
 interface ZenViewProps {
   identity: Identity;
@@ -35,7 +34,10 @@ export function ZenView({ identity, inputMode, onExit }: ZenViewProps) {
   const metrics = useTypingCore((state) => state.metrics);
   const progressByChunk = useGuestProgress((state) => state.progressByChunk);
   const reportGuestProgress = useGuestProgress((state) => state.reportProgress);
-  const chunks = useMemo(() => applyGuestProgress(baseChunks, progressByChunk), [baseChunks, progressByChunk]);
+  const chunks = useMemo(
+    () => mapProgressForIdentity(baseChunks, progressByChunk, identity.kind),
+    [baseChunks, identity.kind, progressByChunk]
+  );
 
   useEffect(() => {
     fetchSources("BOOK")
@@ -78,14 +80,17 @@ export function ZenView({ identity, inputMode, onExit }: ZenViewProps) {
     const handle = window.setTimeout(() => {
       const nextSeq = activeNode.sequence + 1;
       const finalMetrics = metrics();
-      const starsEarned = calculateStars(finalMetrics.wpm, finalMetrics.accuracy);
-      reportGuestProgress({
-        chunkId: selectedChunk.id,
-        wpm: finalMetrics.wpm,
-        accuracy: finalMetrics.accuracy,
-        currentSequence: nextSeq,
-        isCompleted: starsEarned > 0
-      });
+      const completedChunk = activeLine + 1 >= nodes.length;
+      if (identity.kind === "anonymous") {
+        reportGuestProgress({
+          chunkId: selectedChunk.id,
+          wpm: finalMetrics.wpm,
+          accuracy: finalMetrics.accuracy,
+          currentSequence: nextSeq,
+          starsEarned: completedChunk ? 1 : 0,
+          passed: completedChunk
+        });
+      }
 
       if (activeLine + 1 >= nodes.length) {
         setFinished(true);
@@ -94,7 +99,7 @@ export function ZenView({ identity, inputMode, onExit }: ZenViewProps) {
       }
     }, 260);
     return () => window.clearTimeout(handle);
-  }, [activeLine, activeNode, completed, metrics, nodes.length, reportGuestProgress, selectedChunk]);
+  }, [activeLine, activeNode, completed, identity.kind, metrics, nodes.length, reportGuestProgress, selectedChunk]);
 
   if (!selectedChunk || !activeNode || finished) {
     return (
