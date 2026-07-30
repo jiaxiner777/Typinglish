@@ -15,8 +15,9 @@
     "api": "node --env-file-if-exists=.env --import tsx server/index.ts",
     "import:srt": "node --env-file-if-exists=.env --import tsx server/scripts/import-srt.ts",
     "seed:demo": "node --env-file-if-exists=.env --import tsx server/scripts/seed-demo.ts",
+    "backfill:adventure": "node --env-file-if-exists=.env --import tsx server/scripts/backfill-adventure-metadata.ts",
     "check": "tsc -b && tsc -p tsconfig.server.json --noEmit",
-    "test": "node --import tsx --test tests/guest-boundary.test.ts tests/auth.test.ts",
+    "test": "node --import tsx --test tests/adventure-attempt.test.ts tests/adventure-evaluator.test.ts tests/guest-boundary.test.ts tests/auth.test.ts",
     "smoke": "node scripts/smoke.mjs"
   },
   "dependencies": {

@@ -1,8 +1,25 @@
 import type { ChunkRow, ContentNodeRow, SourceRow, UserProgressRow } from "./types.js";
+import {
+  PERFECT_RUN_CONFIG,
+  PRECISION_CONFIG,
+  SPRINT_CONFIG,
+  type AdventureConfig
+} from "../shared/adventure/evaluator.js";
 
 const now = new Date().toISOString();
 
 export const demoUserId = "00000000-0000-4000-8000-000000000001";
+
+export const DEMO_LEVEL_2_SPRINT_CONFIG: AdventureConfig = {
+  schemaVersion: 1,
+  challengeType: "SPRINT",
+  inputMode: "TOLERANT",
+  pass: { minAccuracy: 85, minWpm: 25 },
+  starThresholds: {
+    two: { minAccuracy: 90, minWpm: 35 },
+    three: { minAccuracy: 95, minWpm: 45 }
+  }
+};
 
 export const sources: SourceRow[] = [
   {
@@ -69,6 +86,7 @@ export const chunks: ChunkRow[] = [
     map_pos_x: 0,
     map_pos_y: 0,
     word_count: 24,
+    metadata: { adventure: PRECISION_CONFIG },
     created_at: now
   },
   {
@@ -82,6 +100,7 @@ export const chunks: ChunkRow[] = [
     map_pos_x: 1,
     map_pos_y: 1,
     word_count: 31,
+    metadata: { adventure: SPRINT_CONFIG },
     created_at: now
   },
   {
@@ -95,6 +114,7 @@ export const chunks: ChunkRow[] = [
     map_pos_x: -1,
     map_pos_y: 2,
     word_count: 34,
+    metadata: { adventure: PERFECT_RUN_CONFIG },
     created_at: now
   },
   {
@@ -108,6 +128,7 @@ export const chunks: ChunkRow[] = [
     map_pos_x: 1,
     map_pos_y: 3,
     word_count: 30,
+    metadata: { adventure: PRECISION_CONFIG },
     created_at: now
   },
   {
@@ -121,6 +142,7 @@ export const chunks: ChunkRow[] = [
     map_pos_x: 0,
     map_pos_y: 0,
     word_count: 28,
+    metadata: { adventure: PRECISION_CONFIG },
     created_at: now
   },
   {
@@ -199,6 +221,7 @@ export const chunks: ChunkRow[] = [
     map_pos_x: -1,
     map_pos_y: 4,
     word_count: 36,
+    metadata: { adventure: SPRINT_CONFIG },
     created_at: now
   },
   {
@@ -212,6 +235,7 @@ export const chunks: ChunkRow[] = [
     map_pos_x: 1,
     map_pos_y: 5,
     word_count: 38,
+    metadata: { adventure: PERFECT_RUN_CONFIG },
     created_at: now
   },
   {
@@ -225,6 +249,7 @@ export const chunks: ChunkRow[] = [
     map_pos_x: 0,
     map_pos_y: 6,
     word_count: 34,
+    metadata: { adventure: PRECISION_CONFIG },
     created_at: now
   },
   {
@@ -238,6 +263,7 @@ export const chunks: ChunkRow[] = [
     map_pos_x: 1,
     map_pos_y: 7,
     word_count: 35,
+    metadata: { adventure: SPRINT_CONFIG },
     created_at: now
   },
   {
@@ -251,6 +277,7 @@ export const chunks: ChunkRow[] = [
     map_pos_x: 1,
     map_pos_y: 1,
     word_count: 32,
+    metadata: { adventure: DEMO_LEVEL_2_SPRINT_CONFIG },
     created_at: now
   },
   {
@@ -264,6 +291,7 @@ export const chunks: ChunkRow[] = [
     map_pos_x: -1,
     map_pos_y: 2,
     word_count: 36,
+    metadata: { adventure: PERFECT_RUN_CONFIG },
     created_at: now
   },
   {
@@ -277,6 +305,7 @@ export const chunks: ChunkRow[] = [
     map_pos_x: 1,
     map_pos_y: 3,
     word_count: 34,
+    metadata: { adventure: PRECISION_CONFIG },
     created_at: now
   }
 ];
@@ -884,7 +913,7 @@ export const progressRows: UserProgressRow[] = [
     user_id: demoUserId,
     chunk_id: chunks[0].id,
     highest_wpm: 62,
-    highest_accuracy: 98.4,
+    highest_accuracy: 100,
     stars_earned: 3,
     last_node_sequence: 2,
     is_completed: true,

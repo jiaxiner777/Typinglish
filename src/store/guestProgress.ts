@@ -1,7 +1,6 @@
 import { useStore } from "zustand";
 import { createStore } from "zustand/vanilla";
 import type { ChunkProgress, MapChunk } from "../types";
-import { calculateStars } from "../utils/stats";
 
 export type GuestChunkProgress = Omit<ChunkProgress, "updatedAt">;
 
@@ -10,7 +9,8 @@ interface GuestProgressInput {
   wpm: number;
   accuracy: number;
   currentSequence: number;
-  isCompleted?: boolean;
+  starsEarned: number;
+  passed: boolean;
 }
 
 export interface GuestProgressState {
@@ -33,13 +33,12 @@ export function createGuestProgressStore() {
     progressByChunk: {},
     reportProgress: (input) => {
       const current = get().progressByChunk[input.chunkId] ?? emptyProgress();
-      const starsEarned = calculateStars(input.wpm, input.accuracy);
       const next: GuestChunkProgress = {
         highestWpm: Math.max(current.highestWpm, input.wpm),
         highestAccuracy: Math.max(current.highestAccuracy, input.accuracy),
-        starsEarned: Math.max(current.starsEarned, starsEarned),
+        starsEarned: Math.max(current.starsEarned, input.starsEarned),
         lastNodeSequence: Math.max(current.lastNodeSequence, Math.max(1, input.currentSequence)),
-        isCompleted: current.isCompleted || (input.isCompleted ?? starsEarned > 0)
+        isCompleted: current.isCompleted || input.passed
       };
       set((state) => ({ progressByChunk: { ...state.progressByChunk, [input.chunkId]: next } }));
       return next;
@@ -59,6 +58,14 @@ export function applyGuestProgress(chunks: MapChunk[], progressByChunk: Record<s
     progress: progressByChunk[chunk.id] ?? emptyProgress(),
     locked: chunk.dependencies.some((dependencyId) => !completedChunkIds.has(dependencyId))
   }));
+}
+
+export function mapProgressForIdentity(
+  chunks: MapChunk[],
+  progressByChunk: Record<string, GuestChunkProgress>,
+  identityKind: "anonymous" | "authenticated"
+) {
+  return identityKind === "anonymous" ? applyGuestProgress(chunks, progressByChunk) : chunks;
 }
 
 export const guestProgressStore = createGuestProgressStore();

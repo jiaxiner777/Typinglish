@@ -1,6 +1,8 @@
+import type { AdventureInputMode } from "../shared/adventure/evaluator";
+
 export type SourceType = "SERIES" | "BOOK" | "VOCAB";
 export type SourceStatus = "draft" | "published" | "archived";
-export type InputMode = "STRICT" | "TOLERANT";
+export type InputMode = AdventureInputMode;
 
 export interface AnonymousIdentity {
   kind: "anonymous";
@@ -98,6 +100,11 @@ export interface ProgressReportPayload {
   chunk_id: string;
   wpm: number;
   accuracy: number;
+  error_count: number;
+  elapsed_seconds: number;
+  input_mode: InputMode;
+  completed: boolean;
+  timed_out: boolean;
   current_seq: number;
 }
 
@@ -105,9 +112,17 @@ export interface ProgressResult {
   chunkId: string;
   wpm: number;
   accuracy: number;
+  errorCount: number;
+  elapsedSeconds: number;
+  inputMode: InputMode;
+  completed: boolean;
+  timedOut: boolean;
   currentSequence: number;
   starsEarned: number;
   isCompleted: boolean;
+  passed: boolean;
+  failureReason: string | null;
+  nextStarHint: string | null;
 }
 
 export interface ProgressReportResponse {

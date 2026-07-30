@@ -1,4 +1,4 @@
-import type { ContentNode, ProgressReportResponse, Source, SourceMapResponse, SourceType } from "../types";
+import type { ContentNode, ProgressReportPayload, ProgressReportResponse, Source, SourceMapResponse, SourceType } from "../types";
 import { request } from "./client";
 
 export function fetchSources(type?: SourceType) {
@@ -20,7 +20,18 @@ export async function fetchChunkStream(chunkId: string, cursorSeq = 1, limit = 8
   );
 }
 
-export function reportProgress(payload: { chunk_id: string; wpm: number; accuracy: number; current_seq: number }) {
+export async function fetchAllChunkNodes(chunkId: string) {
+  const nodes: ContentNode[] = [];
+  let cursor = 1;
+  while (true) {
+    const page = await fetchChunkStream(chunkId, cursor, 50);
+    nodes.push(...page.nodes);
+    if (!page.hasMore || page.nextCursor === null) return nodes;
+    cursor = page.nextCursor;
+  }
+}
+
+export function reportProgress(payload: ProgressReportPayload) {
   return request<ProgressReportResponse>("/api/v1/progress/report", {
     method: "POST",
     body: JSON.stringify(payload)

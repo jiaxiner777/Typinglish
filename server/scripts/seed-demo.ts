@@ -53,7 +53,7 @@ async function main() {
       await client.query(
         `
         INSERT INTO chunks (id, source_id, chapter_num, section_num, title, summary, dependencies, map_zone, map_pos_x, map_pos_y, word_count, metadata, created_at, updated_at)
-        VALUES ($1, $2, $3, $4, $5, NULL, $6, $7, $8, $9, $10, '{}'::jsonb, $11, CURRENT_TIMESTAMP)
+        VALUES ($1, $2, $3, $4, $5, NULL, $6, $7, $8, $9, $10, $11, $12, CURRENT_TIMESTAMP)
         ON CONFLICT (id) DO UPDATE SET
           source_id = EXCLUDED.source_id,
           chapter_num = EXCLUDED.chapter_num,
@@ -64,9 +64,23 @@ async function main() {
           map_pos_x = EXCLUDED.map_pos_x,
           map_pos_y = EXCLUDED.map_pos_y,
           word_count = EXCLUDED.word_count,
+          metadata = EXCLUDED.metadata,
           updated_at = CURRENT_TIMESTAMP
         `,
-        [chunk.id, chunk.source_id, chunk.chapter_num, chunk.section_num, chunk.title, chunk.dependencies, chunk.map_zone, chunk.map_pos_x, chunk.map_pos_y, chunk.word_count, chunk.created_at]
+        [
+          chunk.id,
+          chunk.source_id,
+          chunk.chapter_num,
+          chunk.section_num,
+          chunk.title,
+          chunk.dependencies,
+          chunk.map_zone,
+          chunk.map_pos_x,
+          chunk.map_pos_y,
+          chunk.word_count,
+          chunk.metadata ?? {},
+          chunk.created_at
+        ]
       );
     }
 

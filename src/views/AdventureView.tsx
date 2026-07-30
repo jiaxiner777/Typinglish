@@ -1,24 +1,36 @@
 import { AnimatePresence, motion } from "framer-motion";
-import { Check, Flag, Lock, MapPin, Play, Sparkles, Star } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { fetchChunkStream, fetchSourceMap, reportProgress } from "../api";
+import { Check, Clock3, Lock, MapPin, Play, Sparkles, Star, Target } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  challengeSummary,
+  evaluateAdventureAttempt,
+  resolveAdventureConfig,
+  type AdventureConfig,
+  type AdventureEvaluation,
+  type AdventureFailureReason,
+  type AttemptMetrics
+} from "../../shared/adventure/evaluator";
+import { fetchAllChunkNodes, fetchSourceMap, reportProgress } from "../api";
 import { TypingCanvas } from "../components/TypingCanvas";
-import { applyGuestProgress, useGuestProgress } from "../store/guestProgress";
+import {
+  beginAdventureAttempt,
+  claimAdventureAttemptSettlement,
+  createAdventureAttemptLifecycle,
+  getAdventureAttemptRemainingSeconds,
+  isAdventureAttemptTimedOut,
+  startAdventureAttemptClock
+} from "../store/adventureAttempt";
+import { mapProgressForIdentity, useGuestProgress } from "../store/guestProgress";
 import { useTypingCore } from "../store/typingCore";
-import type { ContentNode, Identity, InputMode, MapChunk, Source } from "../types";
-import { calculateStars, joinNodeText } from "../utils/stats";
+import type { ContentNode, Identity, MapChunk, ProgressResult, Source } from "../types";
+import { joinNodeText } from "../utils/stats";
 
 interface AdventureViewProps {
   identity: Identity;
   source: Source | null;
-  inputMode: InputMode;
 }
 
-interface ResultState {
-  wpm: number;
-  accuracy: number;
-  stars: number;
-}
+type ResultState = AttemptMetrics & AdventureEvaluation;
 
 const zoneNames: Record<string, string> = {
   "central-perk": "Central Perk",
@@ -42,8 +54,42 @@ const zoneColors: Record<string, string> = {
   release: "from-amber-300 to-yellow-200"
 };
 
-function challengeLabel(index: number) {
-  return ["提示盲打", "速度挑战", "精准复盘"][index % 3];
+function configForChunk(chunk: MapChunk) {
+  return resolveAdventureConfig(chunk.metadata, Math.max(1, chunk.wordCount * 5));
+}
+
+function failureReasonText(reason: AdventureFailureReason | null) {
+  if (reason === "TIMED_OUT") return "时间已耗尽，本次 Sprint 未完成。";
+  if (reason === "FIRST_ERROR") return "首次错误导致本次挑战结束。";
+  if (reason === "ACCURACY_TOO_LOW") return "正确率未达到本关门槛。";
+  if (reason === "WPM_TOO_LOW") return "速度未达到本关门槛。";
+  if (reason === "TOO_MANY_ERRORS") return "错误次数超过本关限制。";
+  if (reason === "INPUT_MODE_MISMATCH") return "本次输入模式与关卡配置不一致。";
+  if (reason === "INCOMPLETE") return "本次未完成全文。";
+  return null;
+}
+
+function updateAuthenticatedProgress(chunks: MapChunk[], result: ProgressResult) {
+  const next = chunks.map((chunk) =>
+    chunk.id === result.chunkId
+      ? {
+          ...chunk,
+          progress: {
+            ...chunk.progress,
+            highestWpm: Math.max(chunk.progress.highestWpm, result.wpm),
+            highestAccuracy: Math.max(chunk.progress.highestAccuracy, result.accuracy),
+            starsEarned: Math.max(chunk.progress.starsEarned, result.starsEarned),
+            lastNodeSequence: Math.max(chunk.progress.lastNodeSequence, result.currentSequence),
+            isCompleted: chunk.progress.isCompleted || result.isCompleted
+          }
+        }
+      : chunk
+  );
+  const completedIds = new Set(next.filter((chunk) => chunk.progress.isCompleted).map((chunk) => chunk.id));
+  return next.map((chunk) => ({
+    ...chunk,
+    locked: chunk.dependencies.some((dependencyId) => !completedIds.has(dependencyId))
+  }));
 }
 
 function isUnlockedNow(chunk: MapChunk, chunks: MapChunk[]) {
@@ -72,7 +118,7 @@ function TypewriterAirship() {
   );
 }
 
-export function AdventureView({ identity, source, inputMode }: AdventureViewProps) {
+export function AdventureView({ identity, source }: AdventureViewProps) {
   const [baseChunks, setBaseChunks] = useState<MapChunk[]>([]);
   const [selectedChunk, setSelectedChunk] = useState<MapChunk | null>(null);
   const [nodes, setNodes] = useState<ContentNode[]>([]);
@@ -80,11 +126,15 @@ export function AdventureView({ identity, source, inputMode }: AdventureViewProp
   const [loading, setLoading] = useState(false);
   const [attemptKey, setAttemptKey] = useState(0);
   const [settling, setSettling] = useState(false);
-  const settledAttemptRef = useRef<number | null>(null);
-  const metrics = useTypingCore((state) => state.metrics);
+  const [remainingSeconds, setRemainingSeconds] = useState<number | null>(null);
+  const [attemptDeadlineMs, setAttemptDeadlineMs] = useState<number | null>(null);
+  const attemptLifecycleRef = useRef(createAdventureAttemptLifecycle());
   const progressByChunk = useGuestProgress((state) => state.progressByChunk);
   const reportGuestProgress = useGuestProgress((state) => state.reportProgress);
-  const chunks = useMemo(() => applyGuestProgress(baseChunks, progressByChunk), [baseChunks, progressByChunk]);
+  const chunks = useMemo(
+    () => mapProgressForIdentity(baseChunks, progressByChunk, identity.kind),
+    [baseChunks, identity.kind, progressByChunk]
+  );
 
   useEffect(() => {
     if (!source) {
@@ -100,69 +150,143 @@ export function AdventureView({ identity, source, inputMode }: AdventureViewProp
   }, [identity.kind, source]);
 
   const lessonText = useMemo(() => joinNodeText(nodes.map((node) => node.rawText)), [nodes]);
+  const selectedConfig = useMemo<AdventureConfig | null>(
+    () => (selectedChunk ? resolveAdventureConfig(selectedChunk.metadata, Math.max(1, lessonText.length)) : null),
+    [lessonText.length, selectedChunk]
+  );
   const completedCount = chunks.filter((chunk) => chunk.progress.isCompleted).length;
   const currentAirshipIndex = Math.max(0, chunks.findIndex((chunk) => !chunk.progress.isCompleted && !chunk.locked));
+
+  function beginAttempt() {
+    const lifecycle = beginAdventureAttempt(attemptLifecycleRef.current);
+    attemptLifecycleRef.current = lifecycle;
+    setAttemptDeadlineMs(null);
+    setRemainingSeconds(null);
+    setAttemptKey(lifecycle.attemptId);
+  }
 
   async function selectChunk(chunk: MapChunk) {
     if (chunk.locked || result || loading) return;
     setSelectedChunk(chunk);
     setResult(null);
     setNodes([]);
-    setAttemptKey((key) => {
-      const nextKey = key + 1;
-      settledAttemptRef.current = null;
-      return nextKey;
-    });
+    setSettling(false);
+    beginAttempt();
     setLoading(true);
     try {
-      const stream = await fetchChunkStream(chunk.id, 1, 12);
-      setNodes(stream.nodes);
+      setNodes(await fetchAllChunkNodes(chunk.id));
     } finally {
       setLoading(false);
     }
   }
 
-  async function handleComplete(event: { text: string; resetToken: number }) {
-    if (
-      !selectedChunk ||
-      settledAttemptRef.current === attemptKey ||
-      event.resetToken !== attemptKey ||
-      event.text !== lessonText
-    ) {
-      return;
-    }
-    settledAttemptRef.current = attemptKey;
-    setSettling(true);
-    const finalMetrics = metrics();
-    const stars = calculateStars(finalMetrics.wpm, finalMetrics.accuracy);
-    setResult({ ...finalMetrics, stars });
-    const currentSequence = nodes[nodes.length - 1]?.sequence ?? 1;
+  const settleAttempt = useCallback(
+    (settlingAttemptId: number, timedOut: boolean, completedOverride?: boolean) => {
+      if (!selectedChunk || !selectedConfig || !lessonText) return;
+      const claim = claimAdventureAttemptSettlement(attemptLifecycleRef.current, settlingAttemptId);
+      if (!claim.claimed) return;
+      attemptLifecycleRef.current = claim.lifecycle;
+      setAttemptDeadlineMs(null);
+      setSettling(true);
 
-    // Update guest store for immediate UI feedback
-    reportGuestProgress({
-      chunkId: selectedChunk.id,
-      wpm: finalMetrics.wpm,
-      accuracy: finalMetrics.accuracy,
-      currentSequence,
-      isCompleted: stars > 0
-    });
+      const coreMetrics = useTypingCore.getState().metrics();
+      const attemptMetrics: AttemptMetrics = {
+        ...coreMetrics,
+        completed: completedOverride ?? coreMetrics.completed,
+        timedOut
+      };
+      const evaluation = evaluateAdventureAttempt(selectedConfig, attemptMetrics);
+      const resultState: ResultState = { ...attemptMetrics, ...evaluation };
+      const currentSequence = nodes[nodes.length - 1]?.sequence ?? 1;
+      setResult(resultState);
 
-    // Report to server — anonymous returns persisted:false, authenticated writes to DB
-    try {
-      await reportProgress({
+      if (identity.kind === "anonymous") {
+        reportGuestProgress({
+          chunkId: selectedChunk.id,
+          wpm: attemptMetrics.wpm,
+          accuracy: attemptMetrics.accuracy,
+          currentSequence,
+          starsEarned: evaluation.stars,
+          passed: evaluation.passed
+        });
+      }
+
+      void reportProgress({
         chunk_id: selectedChunk.id,
-        wpm: finalMetrics.wpm,
-        accuracy: finalMetrics.accuracy,
+        wpm: attemptMetrics.wpm,
+        accuracy: attemptMetrics.accuracy,
+        error_count: attemptMetrics.errorCount,
+        elapsed_seconds: attemptMetrics.elapsedSeconds,
+        input_mode: attemptMetrics.inputMode,
+        completed: attemptMetrics.completed,
+        timed_out: attemptMetrics.timedOut,
         current_seq: currentSequence
-      });
-    } catch {
-      // Non-critical: guest store already has the immediate result
+      })
+        .then((response) => {
+          if (identity.kind === "authenticated" && response.identity.kind === "authenticated") {
+            setBaseChunks((current) => updateAuthenticatedProgress(current, response.result));
+          }
+        })
+        .catch(() => {
+          // The local result remains visible; authenticated progress can be retried.
+        });
+    }, [identity.kind, lessonText, nodes, reportGuestProgress, selectedChunk, selectedConfig]
+  );
+
+  function handleComplete(event: { text: string; resetToken: number }) {
+    if (event.text !== lessonText) return;
+    settleAttempt(event.resetToken, false, true);
+  }
+
+  function handleTypingError(event: { text: string; resetToken: number }) {
+    if (
+      event.text === lessonText &&
+      selectedConfig?.challengeType === "PERFECT_RUN"
+    ) {
+      settleAttempt(event.resetToken, false, false);
     }
   }
 
+  function handleTypingStart(event: { text: string; resetToken: number; startedAt: number }) {
+    if (event.text !== lessonText || selectedConfig?.challengeType !== "SPRINT") return;
+    const limit = selectedConfig.timeLimitSeconds as number;
+    const lifecycle = startAdventureAttemptClock(
+      attemptLifecycleRef.current,
+      event.resetToken,
+      event.startedAt,
+      limit
+    );
+    if (lifecycle === attemptLifecycleRef.current) return;
+    attemptLifecycleRef.current = lifecycle;
+    setAttemptDeadlineMs(lifecycle.deadlineMs);
+    setRemainingSeconds(limit);
+  }
+
+  useEffect(() => {
+    if (!selectedConfig || selectedConfig.challengeType !== "SPRINT") {
+      setRemainingSeconds(null);
+      return;
+    }
+    if (attemptDeadlineMs === null || result) return;
+    const timerAttemptId = attemptKey;
+
+    const tick = () => {
+      const lifecycle = attemptLifecycleRef.current;
+      const remaining = getAdventureAttemptRemainingSeconds(lifecycle, timerAttemptId, Date.now());
+      if (remaining === null || lifecycle.deadlineMs !== attemptDeadlineMs) return;
+      setRemainingSeconds(remaining);
+      if (isAdventureAttemptTimedOut(lifecycle, timerAttemptId, Date.now())) {
+        settleAttempt(timerAttemptId, true, false);
+      }
+    };
+    tick();
+    const handle = window.setInterval(tick, 100);
+    return () => window.clearInterval(handle);
+  }, [attemptDeadlineMs, attemptKey, result, selectedConfig, settleAttempt]);
+
   function handleResultAction() {
     if (!result) return;
-    if (result.stars > 0) {
+    if (result.passed) {
       setResult(null);
       setSettling(false);
       setSelectedChunk(null);
@@ -171,11 +295,7 @@ export function AdventureView({ identity, source, inputMode }: AdventureViewProp
     }
     setResult(null);
     setSettling(false);
-    setAttemptKey((key) => {
-      const nextKey = key + 1;
-      settledAttemptRef.current = null;
-      return nextKey;
-    });
+    beginAttempt();
   }
 
   return (
@@ -197,6 +317,7 @@ export function AdventureView({ identity, source, inputMode }: AdventureViewProp
         <div className="adventure-scroll relative max-h-[calc(100vh-190px)] overflow-y-auto px-2 pb-8 pt-4">
           <div className="relative mx-auto min-h-[980px] max-w-[390px]">
             {chunks.map((chunk, index) => {
+              const config = configForChunk(chunk);
               const top = 24 + index * 118;
               const left = 150 + (chunk.mapPosX || (index % 2 === 0 ? -1 : 1)) * 58;
               const completed = chunk.progress.isCompleted;
@@ -255,7 +376,7 @@ export function AdventureView({ identity, source, inputMode }: AdventureViewProp
                     </span>
                     <span className="flex h-full flex-col items-center justify-center gap-1">
                       {chunk.locked ? <Lock size={21} /> : completed ? <Check size={22} /> : <Play size={22} />}
-                      <span className="text-[11px] font-bold uppercase tracking-wide">{challengeLabel(index)}</span>
+                      <span className="max-w-[86px] text-[10px] font-bold uppercase leading-3">{challengeSummary(config)}</span>
                     </span>
                   </motion.button>
 
@@ -322,10 +443,27 @@ export function AdventureView({ identity, source, inputMode }: AdventureViewProp
                 <p className="text-sm text-emerald-300">Level {selectedChunk.sectionNum} / {zoneNames[selectedChunk.mapZone] ?? selectedChunk.mapZone}</p>
                 <h2 className="text-3xl font-semibold text-stone-50">{selectedChunk.title}</h2>
               </div>
-              <div className="rounded-md border border-white/10 px-3 py-2 text-sm text-stone-300">
-                {inputMode === "STRICT" ? "错字死锁" : "错字前行"}
-              </div>
+              {selectedConfig && (
+                <div className="flex items-center gap-3 rounded-md border border-white/10 px-3 py-2 text-sm text-stone-300">
+                  <Target size={16} className="text-emerald-300" />
+                  <span>{challengeSummary(selectedConfig)}</span>
+                  <span className="text-stone-500">/</span>
+                  <span>{selectedConfig.inputMode === "STRICT" ? "Strict" : "Tolerant"}</span>
+                </div>
+              )}
             </div>
+
+            {selectedConfig?.challengeType === "SPRINT" && (
+              <div className="flex h-12 items-center justify-between rounded-md border border-amber-200/20 bg-amber-200/5 px-4">
+                <div className="flex items-center gap-2 text-sm text-amber-100">
+                  <Clock3 size={17} />
+                  Sprint timer
+                </div>
+                <span className={`font-mono text-xl font-semibold ${(remainingSeconds ?? 0) <= 5 ? "text-rose-300" : "text-amber-200"}`}>
+                  {(remainingSeconds ?? selectedConfig.timeLimitSeconds ?? 0).toFixed(1)}s
+                </span>
+              </div>
+            )}
 
             <div className="min-h-[300px] rounded-md border border-white/10 bg-black/25 p-5">
               {loading ? (
@@ -337,9 +475,11 @@ export function AdventureView({ identity, source, inputMode }: AdventureViewProp
                   <TypingCanvas
                     key={`${selectedChunk.id}-${attemptKey}`}
                     text={lessonText}
-                    inputMode={inputMode}
+                    inputMode={selectedConfig?.inputMode ?? "STRICT"}
                     resetToken={attemptKey}
-                    onComplete={(event) => void handleComplete(event)}
+                    onStart={handleTypingStart}
+                    onComplete={handleComplete}
+                    onError={handleTypingError}
                   />
                 )
               )}
@@ -378,6 +518,14 @@ export function AdventureView({ identity, source, inputMode }: AdventureViewProp
                     <p className="text-3xl font-semibold">{result.accuracy}%</p>
                     <p className="text-sm text-stone-400">正确率</p>
                   </div>
+                  <div className="rounded-md bg-white/5 p-4">
+                    <p className="text-3xl font-semibold">{result.errorCount}</p>
+                    <p className="text-sm text-stone-400">错误次数</p>
+                  </div>
+                  <div className="rounded-md bg-white/5 p-4">
+                    <p className="text-3xl font-semibold">{result.elapsedSeconds.toFixed(1)}s</p>
+                    <p className="text-sm text-stone-400">用时</p>
+                  </div>
                 </div>
                 <div className="mt-5 flex justify-center gap-2">
                   {Array.from({ length: 3 }).map((_, index) => (
@@ -391,18 +539,21 @@ export function AdventureView({ identity, source, inputMode }: AdventureViewProp
                     </motion.div>
                   ))}
                 </div>
-                {result.stars > 0 && (
+                {result.passed ? (
                   <motion.div className="mt-4 flex items-center justify-center gap-2 text-sm text-emerald-200" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
                     <Sparkles size={16} />
                     新桥梁已点亮，飞艇准备出发
                   </motion.div>
+                ) : (
+                  <p className="mt-4 text-sm text-rose-200">{failureReasonText(result.failureReason)}</p>
                 )}
+                {result.nextStarHint && <p className="mt-2 text-sm text-stone-400">{result.nextStarHint}</p>}
                 <button
                   className="mt-6 h-10 rounded-md bg-emerald-300 px-5 font-semibold text-stone-950"
                   onClick={handleResultAction}
                   type="button"
                 >
-                  {result.stars > 0 ? "继续" : "再试一次"}
+                  {result.passed ? "继续" : "再试一次"}
                 </button>
               </motion.div>
             </motion.div>

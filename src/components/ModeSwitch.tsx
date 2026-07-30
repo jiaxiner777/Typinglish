@@ -6,12 +6,13 @@ interface ModeSwitchProps {
   inputMode: InputMode;
   onViewChange: (view: "adventure" | "zen") => void;
   onInputModeChange: (mode: InputMode) => void;
+  showInputMode?: boolean;
 }
 
-export function ModeSwitch({ view, inputMode, onViewChange, onInputModeChange }: ModeSwitchProps) {
+export function ModeSwitch({ view, inputMode, onViewChange, onInputModeChange, showInputMode = true }: ModeSwitchProps) {
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <div className="flex rounded-md border border-white/10 bg-black/20 p-1">
+      {showInputMode && <div className="flex rounded-md border border-white/10 bg-black/20 p-1">
         <button
           className={`flex h-9 items-center gap-2 rounded px-3 text-sm ${view === "adventure" ? "bg-emerald-400 text-stone-950" : "text-stone-300"}`}
           onClick={() => onViewChange("adventure")}
@@ -28,7 +29,7 @@ export function ModeSwitch({ view, inputMode, onViewChange, onInputModeChange }:
           <BookOpen size={16} />
           纯净
         </button>
-      </div>
+      </div>}
       <div className="flex rounded-md border border-white/10 bg-black/20 p-1">
         <button
           className={`flex h-9 items-center gap-2 rounded px-3 text-sm ${inputMode === "STRICT" ? "bg-sky-300 text-stone-950" : "text-stone-300"}`}

@@ -6,10 +6,25 @@ import { createApp } from "../server/app/createApp.js";
 import type { AppEnv } from "../server/config/env.js";
 import type { Repository } from "../server/repository.js";
 import type { ChunkRow, ContentNodeRow, SourceRow } from "../server/types.js";
-import { applyGuestProgress, createGuestProgressStore } from "../src/store/guestProgress.js";
+import { applyGuestProgress, createGuestProgressStore, mapProgressForIdentity } from "../src/store/guestProgress.js";
 import type { MapChunk } from "../src/types.js";
 
 const now = "2026-01-01T00:00:00.000Z";
+
+function adventureAttempt(patch: Record<string, unknown> = {}) {
+  return {
+    chunk_id: "chunk-1",
+    wpm: 70,
+    accuracy: 100,
+    error_count: 0,
+    elapsed_seconds: 10,
+    input_mode: "STRICT",
+    completed: true,
+    timed_out: false,
+    current_seq: 2,
+    ...patch
+  };
+}
 
 const source: SourceRow = {
   id: "source-1",
@@ -171,7 +186,14 @@ test("anonymous progress stores are isolated and a recreated store starts empty"
   const firstClient = createGuestProgressStore();
   const secondClient = createGuestProgressStore();
 
-  firstClient.getState().reportProgress({ chunkId: "chunk-1", wpm: 70, accuracy: 99, currentSequence: 2 });
+  firstClient.getState().reportProgress({
+    chunkId: "chunk-1",
+    wpm: 70,
+    accuracy: 100,
+    currentSequence: 2,
+    starsEarned: 3,
+    passed: true
+  });
 
   const firstMap = applyGuestProgress(baseMapChunks, firstClient.getState().progressByChunk);
   const secondMap = applyGuestProgress(baseMapChunks, secondClient.getState().progressByChunk);
@@ -184,6 +206,28 @@ test("anonymous progress stores are isolated and a recreated store starts empty"
   const refreshedClient = createGuestProgressStore();
   assert.deepEqual(refreshedClient.getState().progressByChunk, {});
   assert.equal(applyGuestProgress(baseMapChunks, refreshedClient.getState().progressByChunk)[1].locked, true);
+});
+
+test("authenticated maps do not apply or overwrite progress from the guest store", () => {
+  const authenticatedChunks = baseMapChunks.map((chunk, index) =>
+    index === 0
+      ? { ...chunk, progress: { ...chunk.progress, starsEarned: 3, isCompleted: true } }
+      : { ...chunk, locked: false }
+  );
+  const guestProgress = {
+    "chunk-1": {
+      highestWpm: 10,
+      highestAccuracy: 50,
+      starsEarned: 0,
+      lastNodeSequence: 1,
+      isCompleted: false
+    }
+  };
+
+  const resolved = mapProgressForIdentity(authenticatedChunks, guestProgress, "authenticated");
+  assert.equal(resolved[0].progress.starsEarned, 3);
+  assert.equal(resolved[0].progress.isCompleted, true);
+  assert.equal(resolved[1].locked, false);
 });
 
 test("anonymous clients can read public content without creating or loading a user", async () => {
@@ -215,7 +259,7 @@ test("anonymous completion and forged user identifiers never write progress", as
         "Content-Type": "application/json",
         "x-typinglish-user-id": "victim-user"
       },
-      body: JSON.stringify({ chunk_id: "chunk-1", wpm: 70, accuracy: 99, current_seq: 2, userId: "victim-user" })
+      body: JSON.stringify(adventureAttempt({ userId: "victim-user" }))
     });
 
     assert.equal(response.status, 200);
