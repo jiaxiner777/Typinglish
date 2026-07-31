@@ -10,16 +10,83 @@ const now = new Date().toISOString();
 
 export const demoUserId = "00000000-0000-4000-8000-000000000001";
 
-export const DEMO_LEVEL_2_SPRINT_CONFIG: AdventureConfig = {
-  schemaVersion: 1,
-  challengeType: "SPRINT",
-  inputMode: "TOLERANT",
-  pass: { minAccuracy: 85, minWpm: 25 },
-  starThresholds: {
-    two: { minAccuracy: 90, minWpm: 35 },
-    three: { minAccuracy: 95, minWpm: 45 }
-  }
+// ── Chapter One: Geek Typing Core — 12-level difficulty curve ──────────
+// Design principle: PERFECT_RUN levels (8, 12) are optional only.
+// No main-line level depends on a PERFECT_RUN or optional level.
+
+// Main line
+const LEVEL_1_CONFIG: AdventureConfig = {  // Boot Sequence — PRECISION / TOLERANT
+  schemaVersion: 1, challengeType: "PRECISION", inputMode: "TOLERANT",
+  pass: { minAccuracy: 80 },
+  starThresholds: { two: { minAccuracy: 88 }, three: { minAccuracy: 95 } }
 };
+const LEVEL_2_CONFIG: AdventureConfig = {  // Async Vocabulary — PRECISION / STRICT
+  schemaVersion: 1, challengeType: "PRECISION", inputMode: "STRICT",
+  pass: { minAccuracy: 85 },
+  starThresholds: { two: { minAccuracy: 92 }, three: { minAccuracy: 97 } }
+};
+const LEVEL_3_CONFIG: AdventureConfig = {  // Signal Check — PRECISION / STRICT
+  schemaVersion: 1, challengeType: "PRECISION", inputMode: "STRICT",
+  pass: { minAccuracy: 90 },
+  starThresholds: { two: { minAccuracy: 95 }, three: { minAccuracy: 98 } }
+};
+const LEVEL_4_CONFIG: AdventureConfig = {  // Terminal Sprint — SPRINT / TOLERANT
+  schemaVersion: 1, challengeType: "SPRINT", inputMode: "TOLERANT",
+  pass: { minAccuracy: 85 },
+  paceTargetWpm: 25,
+  starThresholds: { two: { minAccuracy: 90, minWpm: 35 }, three: { minAccuracy: 95, minWpm: 45 } }
+};
+const LEVEL_5_CONFIG: AdventureConfig = {  // Keyboard Flow — SPRINT / TOLERANT
+  schemaVersion: 1, challengeType: "SPRINT", inputMode: "TOLERANT",
+  pass: { minAccuracy: 88 },
+  paceTargetWpm: 30,
+  starThresholds: { two: { minAccuracy: 92, minWpm: 38 }, three: { minAccuracy: 95, minWpm: 48 } }
+};
+const LEVEL_6_CONFIG: AdventureConfig = {  // API Rhythm — SPRINT / TOLERANT
+  schemaVersion: 1, challengeType: "SPRINT", inputMode: "TOLERANT",
+  pass: { minAccuracy: 90 },
+  paceTargetWpm: 35,
+  starThresholds: { two: { minAccuracy: 93, minWpm: 42 }, three: { minAccuracy: 96, minWpm: 52 } }
+};
+const LEVEL_7_CONFIG: AdventureConfig = {  // Request Review — PRECISION / STRICT
+  schemaVersion: 1, challengeType: "PRECISION", inputMode: "STRICT",
+  pass: { minAccuracy: 92 },
+  starThresholds: { two: { minAccuracy: 96 }, three: { minAccuracy: 99 } }
+};
+const LEVEL_9_CONFIG: AdventureConfig = {  // Payload Check — PRECISION / STRICT
+  schemaVersion: 1, challengeType: "PRECISION", inputMode: "STRICT",
+  pass: { minAccuracy: 93 },
+  starThresholds: { two: { minAccuracy: 97 }, three: { minAccuracy: 100 } }
+};
+const LEVEL_10_CONFIG: AdventureConfig = { // Service Flow — SPRINT / TOLERANT
+  schemaVersion: 1, challengeType: "SPRINT", inputMode: "TOLERANT",
+  pass: { minAccuracy: 90 },
+  paceTargetWpm: 35,
+  starThresholds: { two: { minAccuracy: 94, minWpm: 45 }, three: { minAccuracy: 97, minWpm: 55 } }
+};
+const LEVEL_11_CONFIG: AdventureConfig = { // Release Notes (main boss) — PRECISION / STRICT
+  schemaVersion: 1, challengeType: "PRECISION", inputMode: "STRICT",
+  pass: { minAccuracy: 95 },
+  starThresholds: { two: { minAccuracy: 98 }, three: { minAccuracy: 100 } }
+};
+
+// Optional challenges (PERFECT_RUN — never block main line)
+const LEVEL_8_CONFIG: AdventureConfig = {  // Clean Command — PERFECT_RUN / STRICT, deps: L3
+  schemaVersion: 1, challengeType: "PERFECT_RUN", inputMode: "STRICT",
+  pass: { maxErrors: 0 },
+  starThresholds: { two: { maxErrors: 0, minWpm: 30 }, three: { maxErrors: 0, minWpm: 40 } }
+};
+const LEVEL_12_CONFIG: AdventureConfig = { // Zero-Error Release — PERFECT_RUN / STRICT, deps: L11
+  schemaVersion: 1, challengeType: "PERFECT_RUN", inputMode: "STRICT",
+  pass: { maxErrors: 0 },
+  starThresholds: { two: { maxErrors: 0, minWpm: 35 }, three: { maxErrors: 0, minWpm: 50 } }
+};
+
+export const chapterOneConfigs = [
+  LEVEL_1_CONFIG, LEVEL_2_CONFIG, LEVEL_3_CONFIG, LEVEL_4_CONFIG,
+  LEVEL_5_CONFIG, LEVEL_6_CONFIG, LEVEL_7_CONFIG, LEVEL_8_CONFIG,
+  LEVEL_9_CONFIG, LEVEL_10_CONFIG, LEVEL_11_CONFIG, LEVEL_12_CONFIG
+];
 
 export const sources: SourceRow[] = [
   {
@@ -136,13 +203,13 @@ export const chunks: ChunkRow[] = [
     source_id: sources[1].id,
     chapter_num: 1,
     section_num: 1,
-    title: "Async Vocabulary",
+    title: "Boot Sequence",
     dependencies: [],
     map_zone: "terminal",
     map_pos_x: 0,
     map_pos_y: 0,
-    word_count: 28,
-    metadata: { adventure: PRECISION_CONFIG },
+    word_count: 25,
+    metadata: { adventure: LEVEL_1_CONFIG },
     created_at: now
   },
   {
@@ -271,13 +338,13 @@ export const chunks: ChunkRow[] = [
     source_id: sources[1].id,
     chapter_num: 1,
     section_num: 2,
-    title: "Terminal Sprint",
+    title: "Async Vocabulary",
     dependencies: ["bbbbbbbb-0001-4000-8000-000000000001"],
     map_zone: "terminal",
     map_pos_x: 1,
     map_pos_y: 1,
-    word_count: 32,
-    metadata: { adventure: DEMO_LEVEL_2_SPRINT_CONFIG },
+    word_count: 22,
+    metadata: { adventure: LEVEL_2_CONFIG },
     created_at: now
   },
   {
@@ -285,13 +352,13 @@ export const chunks: ChunkRow[] = [
     source_id: sources[1].id,
     chapter_num: 1,
     section_num: 3,
-    title: "API Review",
+    title: "Signal Check",
     dependencies: ["bbbbbbbb-0002-4000-8000-000000000002"],
-    map_zone: "backend",
+    map_zone: "terminal",
     map_pos_x: -1,
     map_pos_y: 2,
-    word_count: 36,
-    metadata: { adventure: PERFECT_RUN_CONFIG },
+    word_count: 24,
+    metadata: { adventure: LEVEL_3_CONFIG },
     created_at: now
   },
   {
@@ -299,13 +366,125 @@ export const chunks: ChunkRow[] = [
     source_id: sources[1].id,
     chapter_num: 1,
     section_num: 4,
-    title: "Release Notes",
+    title: "Terminal Sprint",
     dependencies: ["bbbbbbbb-0003-4000-8000-000000000003"],
-    map_zone: "release",
+    map_zone: "terminal",
     map_pos_x: 1,
     map_pos_y: 3,
-    word_count: 34,
-    metadata: { adventure: PRECISION_CONFIG },
+    word_count: 29,
+    metadata: { adventure: LEVEL_4_CONFIG },
+    created_at: now
+  },
+  {
+    id: "bbbbbbbb-0005-4000-8000-000000000005",
+    source_id: sources[1].id,
+    chapter_num: 1,
+    section_num: 5,
+    title: "Keyboard Flow",
+    dependencies: ["bbbbbbbb-0004-4000-8000-000000000004"],
+    map_zone: "backend",
+    map_pos_x: -1,
+    map_pos_y: 4,
+    word_count: 30,
+    metadata: { adventure: LEVEL_5_CONFIG },
+    created_at: now
+  },
+  {
+    id: "bbbbbbbb-0006-4000-8000-000000000006",
+    source_id: sources[1].id,
+    chapter_num: 1,
+    section_num: 6,
+    title: "API Rhythm",
+    dependencies: ["bbbbbbbb-0005-4000-8000-000000000005"],
+    map_zone: "backend",
+    map_pos_x: 1,
+    map_pos_y: 5,
+    word_count: 28,
+    metadata: { adventure: LEVEL_6_CONFIG },
+    created_at: now
+  },
+  {
+    id: "bbbbbbbb-0007-4000-8000-000000000007",
+    source_id: sources[1].id,
+    chapter_num: 1,
+    section_num: 7,
+    title: "Request Review",
+    dependencies: ["bbbbbbbb-0006-4000-8000-000000000006"],
+    map_zone: "backend",
+    map_pos_x: -1,
+    map_pos_y: 6,
+    word_count: 24,
+    metadata: { adventure: LEVEL_7_CONFIG },
+    created_at: now
+  },
+  {
+    id: "bbbbbbbb-0008-4000-8000-000000000008",
+    source_id: sources[1].id,
+    chapter_num: 1,
+    section_num: 8,
+    title: "Clean Command",
+    dependencies: ["bbbbbbbb-0003-4000-8000-000000000003"],
+    map_zone: "regex-arena",
+    map_pos_x: 1,
+    map_pos_y: 2,
+    word_count: 28,
+    metadata: { adventure: LEVEL_8_CONFIG, optional: true },
+    created_at: now
+  },
+  {
+    id: "bbbbbbbb-0009-4000-8000-000000000009",
+    source_id: sources[1].id,
+    chapter_num: 1,
+    section_num: 9,
+    title: "Payload Check",
+    dependencies: ["bbbbbbbb-0007-4000-8000-000000000007"],
+    map_zone: "pipeline",
+    map_pos_x: 1,
+    map_pos_y: 7,
+    word_count: 23,
+    metadata: { adventure: LEVEL_9_CONFIG },
+    created_at: now
+  },
+  {
+    id: "bbbbbbbb-0010-4000-8000-000000000010",
+    source_id: sources[1].id,
+    chapter_num: 1,
+    section_num: 10,
+    title: "Service Flow",
+    dependencies: ["bbbbbbbb-0009-4000-8000-000000000009"],
+    map_zone: "pipeline",
+    map_pos_x: -1,
+    map_pos_y: 8,
+    word_count: 28,
+    metadata: { adventure: LEVEL_10_CONFIG },
+    created_at: now
+  },
+  {
+    id: "bbbbbbbb-0011-4000-8000-000000000011",
+    source_id: sources[1].id,
+    chapter_num: 1,
+    section_num: 11,
+    title: "Release Notes",
+    dependencies: ["bbbbbbbb-0010-4000-8000-000000000010"],
+    map_zone: "release",
+    map_pos_x: 1,
+    map_pos_y: 9,
+    word_count: 31,
+    metadata: { adventure: LEVEL_11_CONFIG },
+    created_at: now
+  },
+  {
+    id: "bbbbbbbb-0012-4000-8000-000000000012",
+    source_id: sources[1].id,
+    chapter_num: 1,
+    section_num: 12,
+    title: "Zero-Error Release",
+    dependencies: ["bbbbbbbb-0011-4000-8000-000000000011"],
+    map_zone: "release",
+    map_pos_x: -1,
+    map_pos_y: 10,
+    word_count: 30,
+    metadata: { adventure: LEVEL_12_CONFIG, optional: true },
     created_at: now
   }
 ];
@@ -387,18 +566,18 @@ export const contentNodes: ContentNodeRow[] = [
     id: "c0000000-0009-4000-8000-000000000009",
     chunk_id: chunks[4].id,
     sequence: 1,
-    raw_text: "Asynchronous code rewards clear naming and patient debugging.",
-    clean_text: "Asynchronous code rewards clear naming and patient debugging.",
-    translation: "异步代码会奖励清晰命名和耐心调试。",
+    raw_text: "The system boots step by step: load kernel, mount disks, start services.",
+    clean_text: "The system boots step by step: load kernel, mount disks, start services.",
+    translation: "系统一步步启动：加载内核、挂载磁盘、启动服务。",
     audio_url: null
   },
   {
     id: "c0000000-0010-4000-8000-000000000010",
     chunk_id: chunks[4].id,
     sequence: 2,
-    raw_text: "Ship the smallest useful commit, then improve the interface.",
-    clean_text: "Ship the smallest useful commit, then improve the interface.",
-    translation: "先提交最小可用改动，再改善接口。",
+    raw_text: "Each step writes a log line before handing control to the next stage.",
+    clean_text: "Each step writes a log line before handing control to the next stage.",
+    translation: "每一步在移交控制权之前都会写一行日志。",
     audio_url: null
   },
   {
@@ -855,54 +1034,198 @@ export const contentNodes: ContentNodeRow[] = [
     id: "c0000000-0019-4000-8000-000000000019",
     chunk_id: "bbbbbbbb-0002-4000-8000-000000000002",
     sequence: 1,
-    raw_text: "Run the test locally, read the failure, and change one thing.",
-    clean_text: "Run the test locally, read the failure, and change one thing.",
-    translation: "本地运行测试，读懂失败原因，然后只改一件事。",
+    raw_text: "Asynchronous code uses callbacks, promises, and async functions to handle concurrency.",
+    clean_text: "Asynchronous code uses callbacks, promises, and async functions to handle concurrency.",
+    translation: "异步代码使用回调、Promise 和 async 函数来处理并发。",
     audio_url: null
   },
   {
     id: "c0000000-0020-4000-8000-000000000020",
     chunk_id: "bbbbbbbb-0002-4000-8000-000000000002",
     sequence: 2,
-    raw_text: "A calm terminal is usually the result of many noisy attempts.",
-    clean_text: "A calm terminal is usually the result of many noisy attempts.",
-    translation: "平静的终端通常来自很多吵闹的尝试。",
+    raw_text: "Race conditions happen when shared state is modified without proper synchronization.",
+    clean_text: "Race conditions happen when shared state is modified without proper synchronization.",
+    translation: "当共享状态在没有正确同步的情况下被修改时，就会发生竞态条件。",
     audio_url: null
   },
   {
     id: "c0000000-0021-4000-8000-000000000021",
     chunk_id: "bbbbbbbb-0003-4000-8000-000000000003",
     sequence: 1,
-    raw_text: "The endpoint is simple, but the contract must be boring and clear.",
-    clean_text: "The endpoint is simple, but the contract must be boring and clear.",
-    translation: "接口可以简单，但契约必须朴素清楚。",
+    raw_text: "A signal handler must be fast, reentrant, and free of blocking operations.",
+    clean_text: "A signal handler must be fast, reentrant, and free of blocking operations.",
+    translation: "信号处理函数必须快速、可重入，且不含阻塞操作。",
     audio_url: null
   },
   {
     id: "c0000000-0022-4000-8000-000000000022",
     chunk_id: "bbbbbbbb-0003-4000-8000-000000000003",
     sequence: 2,
-    raw_text: "Good names make future debugging feel less like archaeology.",
-    clean_text: "Good names make future debugging feel less like archaeology.",
-    translation: "好的命名会让未来调试不像考古。",
+    raw_text: "Check the return code, log the anomaly, and propagate the error upstream.",
+    clean_text: "Check the return code, log the anomaly, and propagate the error upstream.",
+    translation: "检查返回码，记录异常，并将错误向上游传播。",
     audio_url: null
   },
   {
     id: "c0000000-0023-4000-8000-000000000023",
     chunk_id: "bbbbbbbb-0004-4000-8000-000000000004",
     sequence: 1,
-    raw_text: "Write the release note for the person who opens it on Friday.",
-    clean_text: "Write the release note for the person who opens it on Friday.",
-    translation: "给周五打开它的人写发布说明。",
+    raw_text: "Open the terminal, list the files, read the diff, and stage only what you need.",
+    clean_text: "Open the terminal, list the files, read the diff, and stage only what you need.",
+    translation: "打开终端，列出文件，查看差异，只暂存你需要的部分。",
     audio_url: null
   },
   {
     id: "c0000000-0024-4000-8000-000000000024",
     chunk_id: "bbbbbbbb-0004-4000-8000-000000000004",
     sequence: 2,
-    raw_text: "Tell them what changed, why it matters, and what to watch next.",
-    clean_text: "Tell them what changed, why it matters, and what to watch next.",
-    translation: "告诉他们改了什么、为什么重要、接下来要注意什么。",
+    raw_text: "Push the branch, open the pull request, and wait for the checks to pass.",
+    clean_text: "Push the branch, open the pull request, and wait for the checks to pass.",
+    translation: "推送分支，发起合并请求，等待检查通过。",
+    audio_url: null
+  },
+  {
+    id: "b1000000-0001-4000-8000-000000000001",
+    chunk_id: "bbbbbbbb-0005-4000-8000-000000000005",
+    sequence: 1,
+    raw_text: "Type the function signature, add the return type, and keep the line under eighty chars.",
+    clean_text: "Type the function signature, add the return type, and keep the line under eighty chars.",
+    translation: "输入函数签名，加上返回类型，让行宽不超过八十个字符。",
+    audio_url: null
+  },
+  {
+    id: "b1000000-0002-4000-8000-000000000002",
+    chunk_id: "bbbbbbbb-0005-4000-8000-000000000005",
+    sequence: 2,
+    raw_text: "Refactor the loop into a map call, then extract the callback into a named function.",
+    clean_text: "Refactor the loop into a map call, then extract the callback into a named function.",
+    translation: "把循环重构为 map 调用，再把回调提取为一个命名函数。",
+    audio_url: null
+  },
+  {
+    id: "b1000000-0003-4000-8000-000000000003",
+    chunk_id: "bbbbbbbb-0006-4000-8000-000000000006",
+    sequence: 1,
+    raw_text: "Define the route, validate the input, call the service, and return a JSON response.",
+    clean_text: "Define the route, validate the input, call the service, and return a JSON response.",
+    translation: "定义路由，验证输入，调用服务，返回 JSON 响应。",
+    audio_url: null
+  },
+  {
+    id: "b1000000-0004-4000-8000-000000000004",
+    chunk_id: "bbbbbbbb-0006-4000-8000-000000000006",
+    sequence: 2,
+    raw_text: "Set the content type, add the cache headers, and let the middleware handle errors.",
+    clean_text: "Set the content type, add the cache headers, and let the middleware handle errors.",
+    translation: "设置内容类型，添加缓存头，让中间件处理错误。",
+    audio_url: null
+  },
+  {
+    id: "b1000000-0005-4000-8000-000000000005",
+    chunk_id: "bbbbbbbb-0007-4000-8000-000000000007",
+    sequence: 1,
+    raw_text: "Review the diff for naming, error handling, and edge cases before approving.",
+    clean_text: "Review the diff for naming, error handling, and edge cases before approving.",
+    translation: "审批前检查差异中的命名、错误处理和边界情况。",
+    audio_url: null
+  },
+  {
+    id: "b1000000-0006-4000-8000-000000000006",
+    chunk_id: "bbbbbbbb-0007-4000-8000-000000000007",
+    sequence: 2,
+    raw_text: "Check for null safety, resource cleanup, and consistent formatting across the file.",
+    clean_text: "Check for null safety, resource cleanup, and consistent formatting across the file.",
+    translation: "检查空值安全、资源清理和全文件格式一致性。",
+    audio_url: null
+  },
+  {
+    id: "b1000000-0007-4000-8000-000000000007",
+    chunk_id: "bbbbbbbb-0008-4000-8000-000000000008",
+    sequence: 1,
+    raw_text: "Write a clean shell command: pipe, filter, and redirect without a single typo.",
+    clean_text: "Write a clean shell command: pipe, filter, and redirect without a single typo.",
+    translation: "写一条干净的 shell 命令：管道、过滤、重定向，一个拼写错误都没有。",
+    audio_url: null
+  },
+  {
+    id: "b1000000-0008-4000-8000-000000000008",
+    chunk_id: "bbbbbbbb-0008-4000-8000-000000000008",
+    sequence: 2,
+    raw_text: "grep, awk, sort, uniq: each tool does one thing well and chains with the next.",
+    clean_text: "grep, awk, sort, uniq: each tool does one thing well and chains with the next.",
+    translation: "grep、awk、sort、uniq：每个工具做好一件事，再与下一个串联。",
+    audio_url: null
+  },
+  {
+    id: "b1000000-0009-4000-8000-000000000009",
+    chunk_id: "bbbbbbbb-0009-4000-8000-000000000009",
+    sequence: 1,
+    raw_text: "Validate the payload: check required fields, verify types, and reject unknown keys.",
+    clean_text: "Validate the payload: check required fields, verify types, and reject unknown keys.",
+    translation: "验证载荷：检查必填字段，核实类型，拒绝未知键。",
+    audio_url: null
+  },
+  {
+    id: "b1000000-0010-4000-8000-000000000010",
+    chunk_id: "bbbbbbbb-0009-4000-8000-000000000009",
+    sequence: 2,
+    raw_text: "Sanitize strings, parse dates, and convert numbers before touching the database.",
+    clean_text: "Sanitize strings, parse dates, and convert numbers before touching the database.",
+    translation: "在接触数据库之前，清洗字符串、解析日期、转换数字。",
+    audio_url: null
+  },
+  {
+    id: "b1000000-0011-4000-8000-000000000011",
+    chunk_id: "bbbbbbbb-0010-4000-8000-000000000010",
+    sequence: 1,
+    raw_text: "The gateway receives the request, routes it to the service, and proxies the response.",
+    clean_text: "The gateway receives the request, routes it to the service, and proxies the response.",
+    translation: "网关接收请求，将其路由到服务，再代理返回响应。",
+    audio_url: null
+  },
+  {
+    id: "b1000000-0012-4000-8000-000000000012",
+    chunk_id: "bbbbbbbb-0010-4000-8000-000000000010",
+    sequence: 2,
+    raw_text: "Each service owns its data, exposes a stable API, and fails independently of others.",
+    clean_text: "Each service owns its data, exposes a stable API, and fails independently of others.",
+    translation: "每个服务拥有自己的数据，暴露稳定的 API，且独立于其他服务失败。",
+    audio_url: null
+  },
+  {
+    id: "b1000000-0013-4000-8000-000000000013",
+    chunk_id: "bbbbbbbb-0011-4000-8000-000000000011",
+    sequence: 1,
+    raw_text: "Write release notes that answer three questions: what changed, why it matters, and what to verify.",
+    clean_text: "Write release notes that answer three questions: what changed, why it matters, and what to verify.",
+    translation: "写发布说明要回答三个问题：改了什么、为什么重要、需要验证什么。",
+    audio_url: null
+  },
+  {
+    id: "b1000000-0014-4000-8000-000000000014",
+    chunk_id: "bbbbbbbb-0011-4000-8000-000000000011",
+    sequence: 2,
+    raw_text: "Group entries by impact, lead with breaking changes, and link to the full migration guide.",
+    clean_text: "Group entries by impact, lead with breaking changes, and link to the full migration guide.",
+    translation: "按影响分组条目，破坏性变更放最前面，并附上完整迁移指南链接。",
+    audio_url: null
+  },
+  {
+    id: "b1000000-0015-4000-8000-000000000015",
+    chunk_id: "bbbbbbbb-0012-4000-8000-000000000012",
+    sequence: 1,
+    raw_text: "A zero-error release is a promise: every test passed, every check ran green, every sign-off was earned.",
+    clean_text: "A zero-error release is a promise: every test passed, every check ran green, every sign-off was earned.",
+    translation: "零错误发布是一个承诺：每个测试通过，每项检查全绿，每次签字都是应得的。",
+    audio_url: null
+  },
+  {
+    id: "b1000000-0016-4000-8000-000000000016",
+    chunk_id: "bbbbbbbb-0012-4000-8000-000000000012",
+    sequence: 2,
+    raw_text: "Ship with confidence, monitor with humility, and document every lesson the production teaches.",
+    clean_text: "Ship with confidence, monitor with humility, and document every lesson the production teaches.",
+    translation: "自信地发布，谦逊地监控，记录生产环境教给你的每一条经验。",
     audio_url: null
   }
 ];

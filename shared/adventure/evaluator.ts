@@ -17,6 +17,13 @@ export interface AdventureConfig {
     three: AdventureThreshold;
   };
   timeLimitSeconds?: number;
+  /**
+   * SPRINT only: the target WPM used to derive the default timeLimitSeconds.
+   * NOT a pass/1-star requirement — the 1-star condition for SPRINT is:
+   * completed + !timedOut + accuracy >= pass.minAccuracy.
+   * The timeLimit itself enforces the implicit pace requirement.
+   */
+  paceTargetWpm?: number;
 }
 
 export interface AttemptMetrics {
@@ -60,7 +67,8 @@ export const SPRINT_CONFIG: AdventureConfig = {
   schemaVersion: 1,
   challengeType: "SPRINT",
   inputMode: "TOLERANT",
-  pass: { minAccuracy: 90, minWpm: 40 },
+  pass: { minAccuracy: 90 },
+  paceTargetWpm: 40,
   starThresholds: {
     two: { minAccuracy: 92, minWpm: 50 },
     three: { minAccuracy: 95, minWpm: 60 }
@@ -123,11 +131,30 @@ export function parseAdventureConfig(value: unknown): AdventureConfig {
   if (value.timeLimitSeconds !== undefined) {
     config.timeLimitSeconds = readFiniteNumber(value.timeLimitSeconds, "adventure.timeLimitSeconds", 1);
   }
+  if (value.paceTargetWpm !== undefined) {
+    config.paceTargetWpm = readFiniteNumber(value.paceTargetWpm, "adventure.paceTargetWpm", 1);
+  }
   if (config.challengeType === "PERFECT_RUN" && config.inputMode !== "STRICT") {
     throw new Error("PERFECT_RUN must use STRICT input mode.");
   }
-  if (config.challengeType === "SPRINT" && config.pass.minWpm === undefined) {
-    throw new Error("SPRINT pass threshold must define minWpm.");
+  if (config.challengeType === "SPRINT") {
+    // Backward compat: migrate old pass.minWpm → paceTargetWpm
+    if (config.pass.minWpm !== undefined && config.paceTargetWpm === undefined) {
+      config.paceTargetWpm = config.pass.minWpm;
+      delete config.pass.minWpm;
+    }
+    // SPRINT requires paceTargetWpm (for timeLimit derivation) or explicit timeLimitSeconds
+    if (config.paceTargetWpm === undefined && config.timeLimitSeconds === undefined) {
+      throw new Error("SPRINT config must define paceTargetWpm or timeLimitSeconds.");
+    }
+    // SPRINT pass must have minAccuracy (the only pass condition besides completion + no timeout)
+    if (config.pass.minAccuracy === undefined) {
+      throw new Error("SPRINT pass threshold must define minAccuracy.");
+    }
+    // SPRINT pass must NOT retain minWpm — it is not a 1-star gate
+    if (config.pass.minWpm !== undefined) {
+      delete config.pass.minWpm;
+    }
   }
   return config;
 }
@@ -147,8 +174,8 @@ export function resolveAdventureConfig(metadata: unknown, textLength: number): A
   const adventure = isRecord(metadata) ? metadata.adventure : undefined;
   const config = adventure === undefined ? cloneConfig(PRECISION_CONFIG) : parseAdventureConfig(adventure);
   if (config.challengeType === "SPRINT" && config.timeLimitSeconds === undefined) {
-    const targetWpm = config.pass.minWpm as number;
-    config.timeLimitSeconds = Math.max(1, Math.ceil((Math.max(1, textLength) / 5 / targetWpm) * 60));
+    const targetWpm = config.paceTargetWpm as number;
+    config.timeLimitSeconds = Math.max(1, Math.ceil((Math.max(1, textLength) / 5 / targetWpm) * 60 * 1.15));
   }
   return config;
 }
@@ -214,6 +241,23 @@ export function evaluateAdventureAttempt(config: AdventureConfig, metrics: Attem
 
 export function challengeSummary(config: AdventureConfig) {
   if (config.challengeType === "PRECISION") return `Precision / ${config.pass.minAccuracy}%+`;
-  if (config.challengeType === "SPRINT") return `Sprint / ${config.pass.minWpm} WPM`;
+  if (config.challengeType === "SPRINT") return "Sprint";
   return "Perfect Run / 0 errors";
+}
+
+export function passThresholdSummary(config: AdventureConfig) {
+  if (config.challengeType === "SPRINT") {
+    const parts: string[] = [];
+    if (config.timeLimitSeconds !== undefined) {
+      parts.push(`Complete within ${config.timeLimitSeconds}s`);
+    }
+    if (config.pass.minAccuracy !== undefined) {
+      parts.push(`${config.pass.minAccuracy}% accuracy`);
+    }
+    return parts.join(" + ");
+  }
+  const parts: string[] = [];
+  if (config.pass.maxErrors !== undefined) parts.push(`${config.pass.maxErrors} errors`);
+  if (config.pass.minAccuracy !== undefined) parts.push(`${config.pass.minAccuracy}% acc`);
+  return parts.join(" + ");
 }

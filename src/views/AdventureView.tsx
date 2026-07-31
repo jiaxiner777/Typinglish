@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   challengeSummary,
   evaluateAdventureAttempt,
+  passThresholdSummary,
   resolveAdventureConfig,
   type AdventureConfig,
   type AdventureEvaluation,
@@ -40,7 +41,9 @@ const zoneNames: Record<string, string> = {
   rooftop: "Rooftop Finale",
   terminal: "Terminal Dock",
   backend: "API Kitchen",
-  release: "Release Ramp"
+  release: "Release Ramp",
+  "regex-arena": "Regex Arena",
+  pipeline: "CI Pipeline"
 };
 
 const zoneColors: Record<string, string> = {
@@ -51,7 +54,9 @@ const zoneColors: Record<string, string> = {
   rooftop: "from-violet-300 to-fuchsia-300",
   terminal: "from-emerald-300 to-lime-300",
   backend: "from-cyan-300 to-blue-300",
-  release: "from-amber-300 to-yellow-200"
+  release: "from-amber-300 to-yellow-200",
+  "regex-arena": "from-fuchsia-300 to-purple-300",
+  pipeline: "from-indigo-300 to-sky-300"
 };
 
 function configForChunk(chunk: MapChunk) {
@@ -315,7 +320,7 @@ export function AdventureView({ identity, source }: AdventureViewProps) {
         </div>
 
         <div className="adventure-scroll relative max-h-[calc(100vh-190px)] overflow-y-auto px-2 pb-8 pt-4">
-          <div className="relative mx-auto min-h-[980px] max-w-[390px]">
+          <div className="relative mx-auto min-h-[1500px] max-w-[390px]">
             {chunks.map((chunk, index) => {
               const config = configForChunk(chunk);
               const top = 24 + index * 118;
@@ -406,7 +411,13 @@ export function AdventureView({ identity, source }: AdventureViewProps) {
                     style={{ top: top + 10 }}
                   >
                     <p className="text-sm font-semibold text-stone-100">{chunk.title}</p>
-                    <p className="mt-1 text-xs text-stone-500">Level {chunk.sectionNum}</p>
+                    <p className="mt-1 text-xs text-stone-500">
+                      Level {chunk.sectionNum}
+                      {chunk.metadata?.optional === true && (
+                        <span className="ml-1 rounded-sm border border-fuchsia-300/40 bg-fuchsia-950/60 px-1 text-[9px] uppercase tracking-wider text-fuchsia-200">Optional</span>
+                      )}
+                    </p>
+                    <p className="mt-0.5 text-[10px] text-stone-600">{passThresholdSummary(config)}</p>
                     <div className={`mt-1 flex gap-1 ${left > 150 ? "justify-end" : ""}`}>
                       {Array.from({ length: 3 }).map((_, starIndex) => (
                         <Star
@@ -440,15 +451,23 @@ export function AdventureView({ identity, source }: AdventureViewProps) {
           <div className="relative space-y-6">
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div>
-                <p className="text-sm text-emerald-300">Level {selectedChunk.sectionNum} / {zoneNames[selectedChunk.mapZone] ?? selectedChunk.mapZone}</p>
+                <p className="text-sm text-emerald-300">
+                  Level {selectedChunk.sectionNum} / {zoneNames[selectedChunk.mapZone] ?? selectedChunk.mapZone}
+                  {selectedChunk.metadata?.optional === true && (
+                    <span className="ml-2 rounded-sm border border-fuchsia-300/40 bg-fuchsia-950/60 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-fuchsia-200">Optional Challenge</span>
+                  )}
+                </p>
                 <h2 className="text-3xl font-semibold text-stone-50">{selectedChunk.title}</h2>
               </div>
               {selectedConfig && (
-                <div className="flex items-center gap-3 rounded-md border border-white/10 px-3 py-2 text-sm text-stone-300">
-                  <Target size={16} className="text-emerald-300" />
-                  <span>{challengeSummary(selectedConfig)}</span>
-                  <span className="text-stone-500">/</span>
-                  <span>{selectedConfig.inputMode === "STRICT" ? "Strict" : "Tolerant"}</span>
+                <div className="flex flex-col items-end gap-1">
+                  <div className="flex items-center gap-3 rounded-md border border-white/10 px-3 py-2 text-sm text-stone-300">
+                    <Target size={16} className="text-emerald-300" />
+                    <span>{challengeSummary(selectedConfig)}</span>
+                    <span className="text-stone-500">/</span>
+                    <span>{selectedConfig.inputMode === "STRICT" ? "Strict" : "Tolerant"}</span>
+                  </div>
+                  <p className="text-xs text-stone-500">1-star: {passThresholdSummary(selectedConfig)}</p>
                 </div>
               )}
             </div>
