@@ -43,6 +43,13 @@ function readCorsOrigins() {
 export function readEnv(): AppEnv {
   const databaseUrl = readDatabaseUrl();
   const nodeEnv = readNodeEnv();
+  const adminToken = process.env.ADMIN_TOKEN?.trim() || null;
+  if (nodeEnv === "production" && !databaseUrl) {
+    throw new Error("DATABASE_URL is required in production; in-memory storage is only for local development.");
+  }
+  if (nodeEnv === "production" && (!adminToken || adminToken.length < 32)) {
+    throw new Error("Production requires an ADMIN_TOKEN of at least 32 characters.");
+  }
   if (databaseUrl) {
     process.env.DATABASE_URL = databaseUrl;
   }
@@ -53,7 +60,7 @@ export function readEnv(): AppEnv {
     databaseUrl,
     nodeEnv,
     corsOrigins: readCorsOrigins(),
-    adminToken: process.env.ADMIN_TOKEN?.trim() || null,
+    adminToken,
     cookieSecure: nodeEnv === "production"
   };
 }

@@ -2,6 +2,8 @@
 
 Typinglish is an English typing trainer for learners who want to improve **typing speed**, **English sentence muscle memory**, and **content-based practice** at the same time.
 
+For a shareable beta with a hosted database, see [Render deployment](DEPLOYMENT.md).
+
 Instead of isolated word drills, Typinglish is built around **playable levels**, **readable book-style content**, and a **database-backed content pipeline** so the learning material can keep growing over time.
 
 ## What you can do
@@ -11,6 +13,7 @@ Instead of isolated word drills, Typinglish is built around **playable levels**,
 - **Zen mode** — practice with longer reading-style content
 - **Strict / tolerant input modes** — switch between different typing feedback styles
 - **Isolated guest progress** — anonymous progress stays in the current page runtime and resets on refresh
+- **User accounts** — signed-in Adventure progress is stored in PostgreSQL
 
 ### Built-in content management
 - Manage **sources** (books / series / vocab packs)
@@ -51,11 +54,10 @@ PORT=4177
 DATABASE_URL=postgres://typinglish_user:password@127.0.0.1:5432/typinglish
 CORS_ORIGIN=http://127.0.0.1:5173
 VITE_API_BASE_URL=http://127.0.0.1:4177
-ADMIN_TOKEN=
-VITE_ADMIN_TOKEN=
+ADMIN_TOKEN=replace-with-a-random-owner-key-of-at-least-32-characters
 ```
 
-If you enable `ADMIN_TOKEN`, the admin frontend must send the same value through `VITE_ADMIN_TOKEN`.
+Open `/admin` and enter `ADMIN_TOKEN` to access content management. The key is kept only in the current page's memory. Without a configured key, the admin API is disabled. Never put this key in a `VITE_*` variable: those variables are public build-time values.
 
 ### 3. Apply the database schema
 
@@ -93,7 +95,7 @@ That means:
 - public levels are read from the database
 - Zen reading content is read from the database
 - guest progress stays in browser memory and resets on refresh
-- no user progress is written until authenticated sessions are implemented
+- signed-in Adventure progress is saved per user; guest progress is not saved
 - new content should be added through:
   - `npm run seed:demo`
   - `npm run import:srt`
@@ -196,9 +198,10 @@ Typinglish already supports:
 - public gameplay flows
 - built-in admin content management
 - demo seeding and SRT import
+- same-origin production hosting, owner-key protected administration, and idempotent database initialization
 
 The current direction is to continue expanding:
 - more levels and reading content
 - better admin editing workflows
-- fuller user account/auth flows
+- further account features, such as password recovery
 - stronger publishing/content operations

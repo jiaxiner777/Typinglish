@@ -7,7 +7,7 @@ const repo = createRepository();
 const app = createApp(env, repo);
 
 app.listen(env.port, "0.0.0.0", () => {
-  console.log(`Typinglish API listening on http://0.0.0.0:${env.port}`);
-  console.log(`Frontend is expected to run separately with CORS origins: ${env.corsOrigins.length > 0 ? env.corsOrigins.join(", ") : "*"}`);
-  console.log(`Admin API available at /api/admin/v1${env.adminToken ? " (token protected)" : ""}`);
+  console.log(`Typinglish listening on port ${env.port}`);
+  console.log(env.nodeEnv === "production" ? "Web app and API share this origin." : "Start the Vite frontend separately for development.");
+  console.log(env.adminToken ? "Content administration requires the owner key." : "Content administration is disabled until ADMIN_TOKEN is configured.");
 });

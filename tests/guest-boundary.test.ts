@@ -164,7 +164,7 @@ const env: AppEnv = {
   databaseUrl: null,
   nodeEnv: "test",
   corsOrigins: [],
-  adminToken: null,
+  adminToken: "test-owner-key",
   cookieSecure: false
 };
 
@@ -277,7 +277,7 @@ test("anonymous completion and forged user identifiers never write progress", as
 
 test("admin content routes remain mounted", async () => {
   const calls = await withServer(async (baseUrl) => {
-    const response = await fetch(`${baseUrl}/api/admin/v1/sources`);
+    const response = await fetch(`${baseUrl}/api/admin/v1/sources`, { headers: { "x-admin-token": "test-owner-key" } });
     assert.equal(response.status, 200);
     assert.equal((await response.json())[0].title, source.title);
   });

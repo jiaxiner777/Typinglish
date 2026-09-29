@@ -1,4 +1,4 @@
-import { createHash, randomBytes } from "node:crypto";
+import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import type express from "express";
 import type { Repository } from "./repository.js";
 import type { UserRow } from "./types.js";
@@ -139,18 +139,18 @@ export function createSessionMiddleware(repo: Repository): express.RequestHandle
 }
 
 // ---------------------------------------------------------------------------
-// Admin token (unchanged)
+// Admin token: deny access unless a server-side secret is configured.
 // ---------------------------------------------------------------------------
 
 export function requireAdminToken(adminToken: string | null): express.RequestHandler {
   return (req, res, next) => {
     if (!adminToken) {
-      next();
+      res.status(503).json({ error: "Content administration is not configured" });
       return;
     }
 
     const token = req.header("x-admin-token")?.trim();
-    if (token !== adminToken) {
+    if (!token || !timingSafeEqual(Buffer.from(hashToken(token), "hex"), Buffer.from(hashToken(adminToken), "hex"))) {
       res.status(401).json({ error: "Admin token required" });
       return;
     }

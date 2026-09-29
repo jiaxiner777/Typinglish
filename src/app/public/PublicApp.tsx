@@ -1,4 +1,4 @@
-import { Keyboard, LogOut, Shield, X } from "lucide-react";
+import { Keyboard, LogOut, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { fetchCurrentUser, fetchSources, login, logout, register } from "../../api";
 import { ModeSwitch } from "../../components/ModeSwitch";
@@ -88,7 +88,7 @@ export function PublicApp() {
           </div>
           <div>
             <h1 className="text-xl font-semibold text-stone-50">Typinglish 字里行间</h1>
-            <p className="text-sm text-stone-400">English muscle memory trainer / PostgreSQL content flow</p>
+            <p className="text-sm text-stone-400">用短句和故事，练习英文输入</p>
           </div>
         </div>
 
@@ -138,10 +138,6 @@ export function PublicApp() {
             </div>
           )}
 
-          <a className="flex h-11 items-center gap-2 rounded-md border border-sky-300/30 bg-sky-300/10 px-3 text-sm text-sky-100" href="/admin">
-            <Shield size={16} />
-            内容后台
-          </a>
         </div>
       </header>
 

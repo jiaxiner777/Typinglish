@@ -1,9 +1,22 @@
 import type { Chunk, ContentNode, Source, SourceStatus, SourceType } from "../types";
 import { request } from "./client";
 
+// Supplied by the owner at runtime. Never compile a secret into the public bundle
+// or persist it in browser storage.
+let adminToken = "";
+
+export function clearAdminToken() {
+  adminToken = "";
+}
+
 function adminHeaders() {
-  const token = import.meta.env.VITE_ADMIN_TOKEN?.trim();
-  return token ? { "x-admin-token": token } : undefined;
+  return adminToken ? { "x-admin-token": adminToken } : undefined;
+}
+
+export async function authenticateAdmin(token: string) {
+  const candidate = token.trim();
+  await request<Source[]>("/api/admin/v1/sources", undefined, { "x-admin-token": candidate });
+  adminToken = candidate;
 }
 
 export function listAdminSources(filters?: { type?: SourceType; status?: SourceStatus; q?: string }) {

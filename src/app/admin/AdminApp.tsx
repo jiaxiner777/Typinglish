@@ -2,6 +2,8 @@ import { ArrowLeft, BookPlus, PencilLine, Plus, Save, Trash2, UploadCloud } from
 import { useEffect, useMemo, useState } from "react";
 import {
   archiveAdminSource,
+  authenticateAdmin,
+  clearAdminToken,
   createAdminChunk,
   createAdminNode,
   createAdminSource,
@@ -37,6 +39,49 @@ function metadataText(metadata: Record<string, unknown>) {
 }
 
 export function AdminApp() {
+  const [authorized, setAuthorized] = useState(false);
+  const [token, setToken] = useState("");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  async function unlock(event: React.FormEvent) {
+    event.preventDefault();
+    setBusy(true);
+    setError("");
+    try {
+      await authenticateAdmin(token);
+      setToken("");
+      setAuthorized(true);
+    } catch {
+      setError("无法进入后台，请检查管理密钥或稍后重试。");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (authorized) {
+    return <>
+      <div className="mx-auto flex max-w-7xl justify-end px-4 pt-4">
+        <button type="button" className="text-sm text-stone-300 hover:text-white" onClick={() => { clearAdminToken(); setAuthorized(false); }}>锁定后台</button>
+      </div>
+      <AdminWorkspace />
+    </>;
+  }
+
+  return <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center px-6">
+    <a href="/" className="mb-6 text-sm text-emerald-300">← 返回练习</a>
+    <h1 className="text-2xl font-semibold text-stone-50">内容管理</h1>
+    <p className="mt-2 text-sm text-stone-400">仅供管理员使用。关闭或刷新页面后，需要重新输入管理密钥。</p>
+    <form onSubmit={(event) => void unlock(event)} className="mt-6 space-y-4">
+      <label className="block text-sm text-stone-200" htmlFor="admin-key">管理密钥</label>
+      <input id="admin-key" type="password" autoComplete="off" value={token} onChange={(event) => setToken(event.target.value)} required className="h-12 w-full rounded-md border border-white/15 bg-stone-900 px-3 text-stone-50" />
+      {error && <p role="alert" className="text-sm text-rose-300">{error}</p>}
+      <button disabled={busy} type="submit" className="h-12 w-full rounded-md bg-emerald-300 font-semibold text-stone-950 disabled:opacity-60">{busy ? "正在验证…" : "进入后台"}</button>
+    </form>
+  </main>;
+}
+
+function AdminWorkspace() {
   const [sources, setSources] = useState<Source[]>([]);
   const [selectedSourceId, setSelectedSourceId] = useState<string>("");
   const [chunks, setChunks] = useState<Chunk[]>([]);
